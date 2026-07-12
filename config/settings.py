@@ -24,8 +24,12 @@ TRAFIKLAB_API_KEY = _clean_key(os.getenv("TRAFIKLAB_API_KEY", ""))
 # Trafiklab issues separate keys per API product — use both:
 #   GTFS Sweden 3 Static data  → TRAFIKLAB_STATIC_API_KEY
 #   GTFS Regional Realtime     → TRAFIKLAB_REALTIME_API_KEY
-TRAFIKLAB_STATIC_API_KEY = _clean_key(os.getenv("TRAFIKLAB_STATIC_API_KEY", "")) or TRAFIKLAB_API_KEY
-TRAFIKLAB_REALTIME_API_KEY = _clean_key(os.getenv("TRAFIKLAB_REALTIME_API_KEY", "")) or TRAFIKLAB_API_KEY
+TRAFIKLAB_STATIC_API_KEY = (
+    _clean_key(os.getenv("TRAFIKLAB_STATIC_API_KEY", "")) or TRAFIKLAB_API_KEY
+)
+TRAFIKLAB_REALTIME_API_KEY = (
+    _clean_key(os.getenv("TRAFIKLAB_REALTIME_API_KEY", "")) or TRAFIKLAB_API_KEY
+)
 
 OPERATOR = os.getenv("OPERATOR", "sl").lower()
 OPERATOR_NAME = os.getenv("OPERATOR_NAME", OPERATOR.upper())

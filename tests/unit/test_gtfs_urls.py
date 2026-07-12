@@ -10,6 +10,7 @@ def test_static_gtfs_url_sweden_3():
 def test_static_gtfs_url_regional(monkeypatch):
     monkeypatch.setenv("STATIC_FEED", "gtfs_regional")
     from importlib import reload
+
     import config.settings as settings
 
     reload(settings)
@@ -27,6 +28,7 @@ def test_trip_updates_url_regional_default():
 def test_trip_updates_url_sweden(monkeypatch):
     monkeypatch.setenv("REALTIME_FEED", "gtfs_sweden")
     from importlib import reload
+
     import config.settings as settings
 
     reload(settings)

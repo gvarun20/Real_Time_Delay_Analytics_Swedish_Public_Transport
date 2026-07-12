@@ -18,7 +18,6 @@ from jobs.ingest.common import (
     write_metadata,
 )
 
-
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
 

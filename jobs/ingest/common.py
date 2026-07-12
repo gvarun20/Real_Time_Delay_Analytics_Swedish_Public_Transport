@@ -7,7 +7,7 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from config.settings import DATA_RAW_DIR, OPERATOR_NAME
+from config.settings import DATA_RAW_DIR
 
 GTFS_HEADERS = {
     "Accept-Encoding": "gzip, deflate",

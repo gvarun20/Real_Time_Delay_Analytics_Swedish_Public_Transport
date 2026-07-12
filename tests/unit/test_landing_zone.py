@@ -2,12 +2,13 @@ import json
 from datetime import date
 from pathlib import Path
 
-from jobs.ingest.common import realtime_landing_dir, static_landing_dir, write_metadata
+from jobs.ingest.common import write_metadata
 
 
 def test_static_landing_dir_structure(tmp_path, monkeypatch):
     monkeypatch.setenv("DATA_RAW_DIR", str(tmp_path))
     from importlib import reload
+
     import config.settings as settings
 
     reload(settings)
@@ -23,6 +24,7 @@ def test_static_landing_dir_structure(tmp_path, monkeypatch):
 def test_realtime_landing_dir_includes_timestamp(tmp_path, monkeypatch):
     monkeypatch.setenv("DATA_RAW_DIR", str(tmp_path))
     from importlib import reload
+
     import config.settings as settings
 
     reload(settings)
