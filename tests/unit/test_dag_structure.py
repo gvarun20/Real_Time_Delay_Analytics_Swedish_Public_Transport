@@ -8,6 +8,7 @@ DAG_DIR = PROJECT_ROOT / "dags"
 EXPECTED_DAGS = {
     "dag_ingest_gtfs.py": "gtfs_static_ingest",
     "dag_realtime_gtfs.py": "gtfs_realtime_ingest",
+    "dag_gtfs_transform.py": "gtfs_transform",
 }
 
 

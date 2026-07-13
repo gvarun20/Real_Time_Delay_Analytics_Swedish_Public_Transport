@@ -9,7 +9,13 @@ from datetime import date, datetime, timezone
 
 import requests
 
-from config.settings import OPERATOR, OPERATOR_NAME, TRAFIKLAB_REALTIME_API_KEY, trip_updates_url
+from config.settings import (
+    OPERATOR,
+    OPERATOR_NAME,
+    REALTIME_FEED,
+    TRAFIKLAB_REALTIME_API_KEY,
+    trip_updates_url,
+)
 from jobs.ingest.audit import record_ingest_run
 from jobs.ingest.common import (
     REALTIME_HEADERS,
@@ -40,7 +46,8 @@ def run_fetch_realtime(
     if not api_key or api_key in ("your_api_key_here", "your_realtime_key_here"):
         raise ValueError(
             "TRAFIKLAB_REALTIME_API_KEY is not set. Edit .env in VS Code:\n"
-            "  TRAFIKLAB_REALTIME_API_KEY=<key from 'GTFS Regional Realtime'>\n"
+            "  TRAFIKLAB_REALTIME_API_KEY=<key matching REALTIME_FEED's product, "
+            "e.g. 'GTFS Sweden 3 Realtime' for REALTIME_FEED=gtfs_sweden>\n"
             "Then run: docker compose up -d --force-recreate airflow-scheduler airflow-webserver"
         )
 
@@ -59,7 +66,8 @@ def run_fetch_realtime(
         raise ValueError(
             "Trafiklab returned 403 Forbidden"
             + (f": {detail}" if detail else "")
-            + ". Use the key from 'GTFS Regional Realtime' at https://developer.trafiklab.se"
+            + ". Use a key whose project has the product matching REALTIME_FEED "
+            + f"(currently '{REALTIME_FEED}') at https://developer.trafiklab.se"
         )
     response.raise_for_status()
 

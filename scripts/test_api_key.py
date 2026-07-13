@@ -43,7 +43,10 @@ def check_key(operator: str) -> int:
 
     if TRAFIKLAB_REALTIME_API_KEY in PLACEHOLDERS:
         print("FAIL: TRAFIKLAB_REALTIME_API_KEY missing in .env")
-        print("  → Paste key from 'GTFS Regional Realtime' on developer.trafiklab.se")
+        print(
+            f"  → Paste key whose project has the product matching REALTIME_FEED="
+            f"{REALTIME_FEED} on developer.trafiklab.se"
+        )
         ok = False
     else:
         print(f"Realtime key OK (length={len(TRAFIKLAB_REALTIME_API_KEY)}, feed={REALTIME_FEED})")
@@ -62,9 +65,11 @@ def check_key(operator: str) -> int:
     print(f"  TripUpdates:  HTTP {rt_resp.status_code}")
 
     if static_resp.status_code == 403 or rt_resp.status_code == 403:
-        print("\n403 — wrong key matched to wrong API product. Use separate keys in .env:")
-        print("  TRAFIKLAB_STATIC_API_KEY   = GTFS Sweden 3 Static data")
-        print("  TRAFIKLAB_REALTIME_API_KEY = GTFS Regional Realtime")
+        print(
+            "\n403 — wrong key matched to wrong API product, or STATIC_FEED/REALTIME_FEED "
+            "are from different feed families (run scripts/check_feed_access.py to see "
+            "which combos your keys actually authorize)."
+        )
         return 1
 
     if static_resp.status_code in (200, 304) and rt_resp.status_code in (200, 304):

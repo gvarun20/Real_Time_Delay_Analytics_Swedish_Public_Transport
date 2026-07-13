@@ -32,8 +32,8 @@ Details: [docs/02-architecture.md](docs/02-architecture.md)
 
 | Week | Focus | Status |
 |---|---|---|
-| 1 | Data access + Airflow ingestion | **Strong foundation — verify with checklist** |
-| 2 | PySpark transform + star schema load | Planned |
+| 1 | Data access + Airflow ingestion | **Complete** |
+| 2 | PySpark transform + star schema load | **In progress** |
 | 3 | Streamlit dashboard + data quality + tests | Planned |
 | 4 | CI/CD + docs + demo video | CI scaffolded |
 

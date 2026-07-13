@@ -23,6 +23,11 @@ x-airflow-common: &airflow-common
     OPERATOR_NAME: ${OPERATOR_NAME:-SL}
     DATA_RAW_DIR: /opt/airflow/project/data/raw
     PROJECT_ROOT: /opt/airflow/project
+    POSTGRES_HOST: postgres-analytics
+    POSTGRES_PORT: 5432
+    POSTGRES_DB: transit_dw
+    POSTGRES_USER: transit
+    POSTGRES_PASSWORD: transit
   volumes:
     - ./dags:/opt/airflow/dags
     - ./jobs:/opt/airflow/project/jobs
