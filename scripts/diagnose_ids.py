@@ -33,7 +33,7 @@ with zipfile.ZipFile(z) as zf:
 
 static_trips = set()
 with open(f"{tmpdir}/trips.txt") as f:
-    header = f.readline()
+    f.readline()  # skip header
     for line in f:
         static_trips.add(line.split(",")[0])
 

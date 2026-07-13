@@ -6,7 +6,8 @@ any config — it just reports HTTP status codes so you know which REALTIME_FEED
 combination is actually usable with your current Trafiklab keys before editing .env.
 
 Usage (inside the airflow-scheduler container, which has the deps + .env mounted):
-    docker compose exec -T airflow-scheduler python /opt/airflow/project/scripts/check_feed_access.py
+    docker compose exec -T airflow-scheduler python \
+        /opt/airflow/project/scripts/check_feed_access.py
 """
 from __future__ import annotations
 

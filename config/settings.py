@@ -38,9 +38,11 @@ OPERATOR_NAME = os.getenv("OPERATOR_NAME", OPERATOR.upper())
 # gtfs_regional = /gtfs/{operator}/{operator}.zip (needs "GTFS Regional Static data" key)
 STATIC_FEED = os.getenv("STATIC_FEED", "gtfs_sweden_3").lower()
 
-# gtfs_regional = /gtfs-rt/{operator}/TripUpdates.pb (matches "GTFS Regional Realtime" key)
-# gtfs_sweden   = /gtfs-rt-sweden/{operator}/TripUpdatesSweden.pb (needs "GTFS Sweden Realtime" key)
-REALTIME_FEED = os.getenv("REALTIME_FEED", "gtfs_regional").lower()
+# gtfs_sweden   = /gtfs-rt-sweden/{operator}/TripUpdatesSweden.pb (matches "GTFS Sweden 3
+#                 Realtime" key; pairs with the STATIC_FEED=gtfs_sweden_3 default — see ADR-003)
+# gtfs_regional = /gtfs-rt/{operator}/TripUpdates.pb (needs "GTFS Regional Realtime" key; only
+#                 use with STATIC_FEED=gtfs_regional, same-family)
+REALTIME_FEED = os.getenv("REALTIME_FEED", "gtfs_sweden").lower()
 
 POSTGRES_HOST = os.getenv("POSTGRES_HOST", "localhost")
 POSTGRES_PORT = int(os.getenv("POSTGRES_PORT", "5432"))

@@ -18,19 +18,19 @@ def test_static_gtfs_url_regional(monkeypatch):
     assert "gtfs/sl/sl.zip" in url
 
 
-def test_trip_updates_url_regional_default():
+def test_trip_updates_url_sweden_default():
     url = trip_updates_url("sl", "test-rt-key")
-    assert REALTIME_FEED == "gtfs_regional"
-    assert "gtfs-rt/sl/TripUpdates.pb" in url
+    assert REALTIME_FEED == "gtfs_sweden"
+    assert "gtfs-rt-sweden/sl/TripUpdatesSweden.pb" in url
     assert "key=test-rt-key" in url
 
 
-def test_trip_updates_url_sweden(monkeypatch):
-    monkeypatch.setenv("REALTIME_FEED", "gtfs_sweden")
+def test_trip_updates_url_regional(monkeypatch):
+    monkeypatch.setenv("REALTIME_FEED", "gtfs_regional")
     from importlib import reload
 
     import config.settings as settings
 
     reload(settings)
     url = settings.trip_updates_url("sl", "test-rt-key")
-    assert "gtfs-rt-sweden/sl/TripUpdatesSweden.pb" in url
+    assert "gtfs-rt/sl/TripUpdates.pb" in url

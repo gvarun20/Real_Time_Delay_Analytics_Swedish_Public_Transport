@@ -20,9 +20,19 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from config.settings import DATA_RAW_DIR, OPERATOR, OPERATOR_NAME, REALTIME_FEED, STATIC_FEED  # noqa: E402
-from jobs.transform.ids import SL_AGENCY_IDS_REGIONAL, SL_AGENCY_IDS_SWEDEN3, normalize_rt_stop_id  # noqa: E402
+from config.settings import (  # noqa: E402
+    DATA_RAW_DIR,
+    OPERATOR,
+    OPERATOR_NAME,
+    REALTIME_FEED,
+    STATIC_FEED,
+)
 from jobs.transform.gtfs_realtime import parse_trip_updates  # noqa: E402
+from jobs.transform.ids import (  # noqa: E402
+    SL_AGENCY_IDS_REGIONAL,
+    SL_AGENCY_IDS_SWEDEN3,
+    normalize_rt_stop_id,
+)
 from jobs.transform.loaders import (  # noqa: E402
     delete_facts_for_date,
     get_vehicle_type_keys,
@@ -159,7 +169,9 @@ def run_transform(
             .filter(F.col("rn") == 1)
             .select(
                 "trip_id",
-                gtfs_time_to_ts(F.lit(service_date), F.col("departure_time")).alias("trip_start_ts"),
+                gtfs_time_to_ts(F.lit(service_date), F.col("departure_time")).alias(
+                    "trip_start_ts"
+                ),
             )
             .withColumn("trip_start_epoch", F.unix_timestamp(F.col("trip_start_ts")))
         )

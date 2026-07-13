@@ -15,7 +15,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from dags.common import DEFAULT_ARGS  # noqa: E402
-from jobs.transform.paths import latest_realtime_pb, static_zip_path  # noqa: E402
+from jobs.transform.paths import latest_realtime_pb  # noqa: E402
 from jobs.transform_gtfs import run_transform  # noqa: E402
 
 
