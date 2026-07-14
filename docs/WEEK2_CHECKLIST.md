@@ -38,44 +38,54 @@ Mirrors `docs/WEEK1_CHECKLIST.md`. Cross-reference `transit_delay_pipeline_4week
       realtime-availability check → `transform_with_pyspark` task
 - [x] Execution date passed via Airflow's `{{ ds }}` macro (`context["ds"]`)
 - [x] JDBC/Java version documented (`docker/airflow/Dockerfile` — OpenJDK 17 for PySpark)
-- [ ] End-to-end **DAG run** (not just manual script) verified green in Airflow UI for a full
-      (non-sampled) service date — manual script run is confirmed working; DAG trigger not yet
-      re-verified since the fixes below
+- [x] End-to-end **DAG run** (not just manual script) verified green via Airflow CLI for a full
+      (non-sampled) service date — `scheduled__2026-07-12` and `scheduled__2026-07-13` both
+      succeeded end-to-end (`airflow dags list-runs -d gtfs_transform` → `state=success`)
 
 ## Bugs found and fixed this week (see `docs/decisions/004-week2-transform-debugging.md`)
 
 - [x] Feed-family ID mismatch (`gtfs_sweden_3` static + `gtfs_regional` realtime → 0 join matches)
 - [x] `docker-compose.yml` `POSTGRES_DB` typo (`transit` vs actual `transit_dw`)
 - [x] `execute_values(..., fetch=True)` missing → dimension key maps silently incomplete
+- [x] Missing `fs_default` Airflow connection → `FileSensor` failed instantly on real DAG runs
+- [x] `psycopg2.errors.CardinalityViolation` on full (non-sampled) runs → deduplicate fact rows
+      by `(trip_id, stop_key, stop_sequence)` before each insert batch
 
 ## Week 2 deliverables checklist (from master plan)
 
 - [x] Star schema DDL in repo
 - [x] PySpark job runs standalone (`docker compose exec airflow-scheduler python
       jobs/transform_gtfs.py ...`)
-- [ ] PySpark job runs **via Airflow** (DAG trigger) — confirm next
-- [x] At least 1 service date loaded end-to-end (`2026-07-12`, 638 rows)
+- [x] PySpark job runs **via Airflow** (DAG trigger) — `2026-07-12` and `2026-07-13` both
+      succeeded as real Airflow DAG runs, full non-sampled data
+- [x] At least 1 service date loaded end-to-end (2 dates: `2026-07-12` 12,209 rows,
+      `2026-07-13` 10,057 rows)
 
 ## Week 2 phase gate (from master plan)
 
 > `fact_trip_delay` has rows in Postgres; dimensions are populated; one manual DAG run succeeds.
 
-- [x] `fact_trip_delay` has rows (638)
-- [x] Dimensions populated (573 routes, 10,234 stops, 8 vehicle types, `dim_date` seeded)
-- [ ] "One manual **DAG** run succeeds" — only the underlying script has been re-verified since
-      the fixes; trigger `gtfs_transform` in the Airflow UI (or `airflow dags trigger
-      gtfs_transform`) to close this out
+- [x] `fact_trip_delay` has rows (22,266 total across two full service dates)
+- [x] Dimensions populated (290–573 routes and 5,984–10,234 stops depending on date, 8 vehicle
+      types, `dim_date` seeded)
+- [x] "One manual/real **DAG** run succeeds" — exceeded: **two** real `gtfs_transform` DAG runs
+      (`scheduled__2026-07-12`, `scheduled__2026-07-13`) succeeded end-to-end via Airflow
 
-## Remaining before moving to Week 3
+## Known issue carried into Week 3
 
-- [ ] Trigger `gtfs_transform` from the Airflow UI (not just the manual script) to confirm the
-      DAG itself succeeds end-to-end post-fix
-- [ ] Run a **full, non-sampled** transform (drop `--sample-fraction`) for at least one date
-- [ ] Consider re-running for a few more consecutive dates to get closer to the project-level
-      "≥7 days of delay facts" success criterion (currently only 1 date loaded)
-- [ ] Review and commit outstanding changes (`.env.example`, docs, code fixes)
+- [ ] Average `delay_seconds` looks unusually large/skewed (`+61 min` on `2026-07-12`, `-9 min`
+      on `2026-07-13`) — investigate as part of Week 3's data quality checks
+      (`jobs/validate_data_quality.py`), not a Week 2 blocker
+
+## Optional stretch (not required for phase gate)
+
+- [ ] `2026-07-11`'s realtime snapshot predates the `REALTIME_FEED=gtfs_sweden` fix and cannot be
+      recovered (GTFS-RT is a live feed, not backfillable) — that DAG run stays `failed`
+      permanently; excluded from date coverage
+- [ ] Keep running the ingestion + transform DAGs daily going forward to approach the
+      project-level "≥7 days of delay facts" success criterion (currently 2 full days loaded)
 
 ---
 
-**Once the "Remaining before moving to Week 3" items are done → proceed to Week 3: Dashboard +
+**Week 2 is complete — all phase gate items are met or exceeded. Proceed to Week 3: Dashboard +
 Data Quality + Tests.**

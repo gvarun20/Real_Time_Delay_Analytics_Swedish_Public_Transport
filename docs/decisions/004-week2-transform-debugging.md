@@ -1,18 +1,22 @@
-# ADR 004: Week 2 Transform Debugging — Three Stacked Bugs from "0 rows" to "638 rows"
+# ADR 004: Week 2 Transform Debugging — Five Stacked Bugs from "0 rows" to a Green DAG
 
 **Status:** Resolved
-**Date:** 2026-07-13
+**Date:** 2026-07-13 (Bugs 1–3), 2026-07-14 (Bugs 4–5, real DAG runs)
 
 ## Context
 
 After building the PySpark transform (`jobs/transform_gtfs.py`) and wiring it into
-`dags/dag_gtfs_transform.py`, the Week 2 phase gate ("`fact_trip_delay` has rows in Postgres")
-would not pass. Running the job manually failed, then "succeeded" with 0 rows, three separate
-times, for three unrelated reasons. This ADR documents each bug, how it was diagnosed, and the
-fix, so future contributors don't have to re-discover the same failure modes.
+`dags/dag_gtfs_transform.py`, the Week 2 phase gate ("`fact_trip_delay` has rows in Postgres;
+one manual DAG run succeeds") would not pass. Running the job manually failed, then "succeeded"
+with 0 rows, then — once triggered as a real Airflow DAG run instead of a manual script — hit two
+*more* bugs that never showed up in manual/sampled testing. This ADR documents all five bugs, how
+each was diagnosed, and the fix, so future contributors don't have to re-discover the same
+failure modes.
 
 Each bug was hidden behind the previous one — fixing bug 1 revealed bug 2; fixing bug 2 revealed
-bug 3. All three had to be fixed before the pipeline produced correct output.
+bug 3; and bugs 4–5 only surfaced once the job ran as a real, full (non-sampled) DAG execution
+instead of the small manual `--sample-fraction 0.05` script run used earlier. All five had to be
+fixed before the pipeline produced correct output end-to-end via Airflow.
 
 ---
 
@@ -142,6 +146,67 @@ matching the 638 rows from the join exactly, with zero skips.
 
 ---
 
+## Bug 4: `FileSensor` failed instantly — no `fs_default` Airflow connection
+
+**Symptom:** Real (non-manual) `gtfs_transform` DAG runs for `2026-07-12` and `2026-07-13`
+failed at the very first task, `wait_for_static_gtfs`, in under one second — far too fast to be
+the `FileSensor`'s 60-minute timeout:
+
+```
+wait_for_static_gtfs | failed | start 09:38:39.986 | end 09:38:40.964   (< 1 second)
+```
+
+**Root cause:** `airflow connections list` returned "No data found" — the metadata database had
+**zero** connections, including `fs_default`, which `FileSensor` needs to check filesystem paths.
+`docker-compose.yml`'s `airflow-init` service only ran `airflow db migrate`; unlike the older,
+combined `airflow db init`, `db migrate` alone does not reliably seed Airflow's default
+connections in this version.
+
+**Fix:** `docker compose exec airflow-scheduler airflow connections add fs_default --conn-type fs`
+(idempotent — safe to run any time; if a default is already registered it just reports "already
+exists" instead of erroring).
+
+**Note:** this specific failure mode is a *deployment/setup* gap, not an application bug — worth
+adding as a one-time step to the runbook for anyone standing up this project fresh.
+
+---
+
+## Bug 5: `psycopg2.errors.CardinalityViolation` on full (non-sampled) runs
+
+**Symptom:** Once Bug 4 was fixed, `wait_for_static_gtfs` and `check_realtime_snapshot` passed,
+but `transform_with_pyspark` failed partway through loading facts:
+
+```
+psycopg2.errors.CardinalityViolation: ON CONFLICT DO UPDATE command cannot affect row a second time
+HINT:  Ensure that no rows proposed for insertion within the same command have duplicate constrained values.
+```
+
+This never appeared during manual testing because every manual run so far had used
+`--sample-fraction 0.05` (~5% of SL trips) — small enough that two duplicate-keyed rows never
+happened to land in the same 5,000-row insert batch. The DAG's `transform_task()` calls
+`run_transform()` with no sample fraction, i.e. the **full** unsampled dataset, which reliably
+triggers it.
+
+**Root cause:** `insert_facts()` batches rows into `execute_values(..., page_size=5000)` calls
+against `fact_trip_delay`, whose upsert target is `ON CONFLICT (trip_id, stop_key, date_key,
+stop_sequence)`. Postgres cannot apply `DO UPDATE` twice to the same conflict target **within one
+statement** — if two output rows from the Spark `joined` DataFrame share that exact key and land
+in the same 5,000-row batch, the whole `INSERT` fails. The full national realtime feed evidently
+contains duplicate `TripUpdate` entities for the same `(trip_id, stop_id, stop_sequence)`, which
+survive the join unmodified.
+
+**Fix:** In `jobs/transform_gtfs.py`, accumulate rows into a `dict` keyed on
+`(trip_id, stop_key, stop_sequence)` instead of a plain `list` before each insert batch. Dict
+key assignment collapses duplicates automatically (last one wins) *before* they ever reach
+`execute_values()`, so a batch can never contain two rows with the same conflict target. A new
+`duplicate_keys` counter logs how many were collapsed, for visibility.
+
+**Result:** `scheduled__2026-07-13` succeeded end-to-end (10,057 fact rows, 257 routes, 5,984
+stops); `scheduled__2026-07-12` re-run with the fix succeeded in ~5 minutes (12,209 fact rows,
+290 routes, 6,390 stops).
+
+---
+
 ## Consequences
 
 - `scripts/check_feed_access.py` is now a permanent diagnostic tool — run it after any Trafiklab
@@ -149,5 +214,16 @@ matching the 638 rows from the join exactly, with zero skips.
 - Any future code that calls `execute_values()` with a `RETURNING` clause **must** pass
   `fetch=True`. Consider a lint/code-review checklist note for this, since it fails silently
   (no exception, just missing data) and only manifests once row counts exceed the page size.
-- The Week 2 phase gate ("`fact_trip_delay` has rows in Postgres") is now met — see
-  `docs/WEEK2_CHECKLIST.md` for full status.
+- Any future code that batches an upsert with `ON CONFLICT ... DO UPDATE` must deduplicate on the
+  conflict-target columns *before* batching — a `dict` keyed on those columns is the simplest
+  guard, and it must be exercised with **full, non-sampled** data at least once, since small
+  sampled runs can mask this class of bug entirely.
+- On a fresh environment, run `airflow connections add fs_default --conn-type fs` once after
+  `airflow db migrate` if any DAG uses `FileSensor` (or similar hooks) and connections come back
+  empty from `airflow connections list`.
+- Average delays observed so far (`+61 min` on 2026-07-12, `-9 min` on 2026-07-13) look unusually
+  large/skewed for real transit data — flagged as a Week 3 data-quality investigation, not a
+  Week 2 blocker.
+- The Week 2 phase gate is now fully met: `fact_trip_delay` has rows (22,266 across two full
+  service dates), dimensions are populated, and **two** real `gtfs_transform` DAG runs succeeded
+  end-to-end via Airflow (not just the manual script) — see `docs/WEEK2_CHECKLIST.md`.
