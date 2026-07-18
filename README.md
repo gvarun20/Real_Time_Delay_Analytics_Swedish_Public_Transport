@@ -254,6 +254,82 @@ py -m pip install -r requirements.txt
 py -m streamlit run dashboard/app.py
 ```
 
+Then open **http://localhost:8501** in your browser.
+
+> **Note:** This dashboard runs on your computer (local). It is not a public website yet.
+> Your Docker Postgres must be running so the charts can load data.
+
+---
+
+## How to read the dashboard (what each part means)
+
+The Streamlit app is the “shop window” of the pipeline. You choose filters on the left, then the page shows delay results.
+
+### Step 1 — Use the sidebar filters
+
+| Filter | What it does |
+|---|---|
+| **Date range** | Which service days to include (only dates that already have data in Postgres) |
+| **Route** | Focus on one or more bus/metro/rail lines (leave empty = all routes) |
+| **Vehicle type** | Bus, Metro, Rail, etc. (leave empty = all types) |
+
+Change a filter → the KPIs and charts update for that selection.
+
+### Step 2 — Read the KPI cards (top of the page)
+
+KPIs are the **quick health check** of the network for your selected period. Look here first before diving into charts.
+
+| KPI | Meaning | Why it matters |
+|---|---|---|
+| **Median delay** | The “middle” delay (half of trips are better, half worse) | More stable than average — one crazy late trip does not dominate |
+| **% on-time (≤0 delay)** | Share of observations that arrived on time or early | Simple service-quality score |
+| **Trips observed** | How many distinct trips we saw in the data | Shows if you have enough data to trust the charts |
+| **Worst route (avg delay)** | Route with the highest average delay in the filter | Points you to where to investigate next |
+
+**Positive delay** = late. **Negative delay** = early. **0** = on time.
+
+### Step 3 — Average delay by route (bar chart)
+
+- Horizontal bars: each bar is a route.
+- Longer / redder usually means **more late on average**.
+- Use this to answer: *“Which lines are struggling?”*
+
+### Step 4 — Delay heatmap (hour × day of week)
+
+- Rows = day of week, columns = hour of day.
+- Darker / warmer cells = worse average delay in that time slot.
+- Use this to answer: *“Is rush hour worse? Are weekends different?”*
+
+### Step 5 — Map of stops (colored by delay)
+
+- Each point is a **stop** (with latitude / longitude).
+- Color = average delay at that stop (for your filters).
+- Size = how many observations we have (bigger = more data).
+- Hover a point to see the stop name and delay.
+
+**Why the map matters:** tables show *names*; the map shows *where* problems cluster (for example a corridor or station area).
+
+### Step 6 — Top 10 worst stops (table)
+
+- Sorted list of stops with the highest average delay.
+- Includes observation count so tiny sample sizes do not mislead you.
+- Use this with the map: table for ranking, map for location.
+
+### Step 7 — Delay distribution (histogram)
+
+- Shows how delays are spread (many small delays vs a few huge ones).
+- The vertical line at **0** separates early (left) from late (right).
+- Use this to answer: *“Are most trips a little late, or are we pulled by outliers?”*
+
+### If the page says “No data”
+
+- The filters are too narrow, **or**
+- That date was never transformed into Postgres yet.
+
+Widen the date range, clear route filters, or run `gtfs_transform` for more days.
+
+---
+
 ### 4. Run tests
 
 ```powershell
