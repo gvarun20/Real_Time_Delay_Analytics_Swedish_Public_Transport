@@ -1,130 +1,307 @@
 # Real-Time Delay Analytics Pipeline for Swedish Public Transport
 
-An end-to-end data engineering pipeline: **Airflow** orchestration, **PySpark** transformation, **Kimball star schema** in PostgreSQL, and a **Streamlit** dashboard — built on Swedish GTFS data from Trafiklab.
+A complete **data engineering** project that takes Swedish public transport data, cleans and joins it, stores it in a proper analytical database, and shows delay patterns in a simple dashboard.
 
-## Why this project?
+Everything runs **locally in Docker** at **$0 cost**. No paid cloud is required.
 
-Public transit publishes **schedules** (GTFS static) and **live delays** (GTFS-RT), but they are rarely joined in a production-grade pipeline. This project:
+---
 
-- Ingests both feeds on a reliable schedule (Airflow)
-- Transforms them into delay facts (PySpark)
-- Models analytics in a star schema (PostgreSQL)
-- Surfaces insights in a dashboard (Streamlit)
+## The problem (in simple words)
 
-**Read the full rationale:** [docs/01-project-purpose-and-goals.md](docs/01-project-purpose-and-goals.md)
+Swedish transit (for example **SL in Stockholm**) publishes two kinds of open data:
 
-## Architecture
+1. **The schedule** — when a bus, metro, or train is *planned* to arrive (GTFS static files).
+2. **Live updates** — when it *actually* arrives, including how late or early it is (GTFS-RT TripUpdates).
+
+These files exist separately. By themselves they do **not** easily answer questions like:
+
+- Which routes are late most often?
+- Which stops are the worst at rush hour?
+- Do delays change by day of week or hour of day?
+
+To answer those questions you need a **pipeline**: download the data on time, join schedule with live updates, store results in a clean model, check quality, and show charts. Without that, analysis stays messy — manual downloads and one-off scripts with no history.
+
+---
+
+## The goal of this project
+
+Build an end-to-end pipeline that:
+
+| Goal | What “done” looks like |
+|---|---|
+| **Ingest** | Airflow downloads static + realtime GTFS on a schedule into `data/raw/` |
+| **Transform** | PySpark joins schedule + live updates and computes `delay_seconds` |
+| **Model** | Results land in a Kimball **star schema** in PostgreSQL |
+| **Quality** | Automated checks fail the pipeline when critical data is bad |
+| **Serve** | A Streamlit dashboard shows delays by route, stop, and time |
+| **Prove quality** | Tests + GitHub Actions CI keep the project trustworthy |
+
+**Focus operator:** SL (Stockholm).  
+**Data source:** [Trafiklab](https://www.trafiklab.se/) open GTFS APIs.
+
+---
+
+## How we planned the work (4-week plan)
+
+We split the project into **four weeks**, each with a clear outcome. You do not start the next week until the current week’s **phase gate** is passed.
+
+| Week | Theme | Main work | Phase gate (“do not continue until…”) |
+|---|---|---|---|
+| **1** | Foundation | Trafiklab access, Docker, Airflow, raw landing zone | Static + realtime files land on schedule |
+| **2** | Transformation | Star schema DDL, PySpark job, load Postgres | `fact_trip_delay` has real rows; DAG run succeeds |
+| **3** | Serving layer | Streamlit dashboard, data quality checks, pytest | Dashboard reads Postgres; DQ fails on bad data; tests green |
+| **4** | Production polish | README, CI badge, demo video, optional public demo | CI green; docs + demo ready for portfolio |
+
+Full plan document: [`transit_delay_pipeline_4week_plan.md`](transit_delay_pipeline_4week_plan.md)
+
+### Why divide it this way?
+
+- **Week 1** proves we can *get* the data reliably (harder than it sounds: API keys, feed types, folders).
+- **Week 2** is the heaviest week: join logic, Spark, and the warehouse model.
+- **Week 3** makes the data *useful and trustworthy* (dashboard + quality gates + tests).
+- **Week 4** makes the project *readable for recruiters* (docs, CI, demo).
+
+---
+
+## How we progressed (what is done today)
+
+| Week | Status | What we delivered |
+|---|---|---|
+| **1** | Complete | Airflow DAGs for static + realtime ingest; Docker Compose stack; landing zone under `data/raw/`; API key setup and runbooks |
+| **2** | Complete | Star schema in Postgres; PySpark transform; `gtfs_transform` DAG; real delay facts loaded (e.g. 2026-07-12 and 2026-07-13); hard debugging documented (feed ID mismatch, DB name, upsert bugs, etc.) |
+| **3** | Complete | Streamlit dashboard (KPIs, charts, map); data quality task after transform; 60+ pytest tests; CI with Postgres service |
+| **4** | Next | README polish (this file), demo video, portfolio write-up, optional Streamlit Cloud with sample data |
+
+Checklists:
+
+- [Week 1](docs/WEEK1_CHECKLIST.md) · [Week 2](docs/WEEK2_CHECKLIST.md) · [Week 3](docs/WEEK3_CHECKLIST.md)
+
+---
+
+## Overall architecture (simple picture)
+
+Think of the system as a **factory line**:
+
+```
+Trafiklab (internet)
+        │
+        ▼
+   Airflow DAGs          ← “the schedule / supervisor”
+   (download jobs)
+        │
+        ▼
+   data/raw/             ← “raw warehouse shelves” (immutable files)
+        │
+        ▼
+   PySpark transform     ← “the workshop” (join + delay math)
+        │
+        ▼
+   PostgreSQL            ← “the curated store” (star schema)
+        │
+        ├──► Data quality checks  ← “quality control”
+        │
+        └──► Streamlit dashboard  ← “the shop window”
+```
 
 ```mermaid
 flowchart LR
-    TL_STATIC[Trafiklab GTFS Static] --> DAG1[gtfs_static_ingest]
-    TL_RT[Trafiklab GTFS-RT] --> DAG2[gtfs_realtime_ingest]
-    DAG1 --> RAW[(data/raw/)]
-    DAG2 --> RAW
-    RAW --> SPARK[PySpark transform]
-    SPARK --> PG[(PostgreSQL star schema)]
-    PG --> ST[Streamlit dashboard]
+    A[Trafiklab<br/>Static GTFS] --> B[gtfs_static_ingest]
+    C[Trafiklab<br/>GTFS-RT] --> D[gtfs_realtime_ingest]
+    B --> E[(data/raw/)]
+    D --> E
+    E --> F[gtfs_transform<br/>PySpark]
+    F --> G[(PostgreSQL<br/>star schema)]
+    G --> H[validate_data_quality]
+    G --> I[Streamlit dashboard]
 ```
 
-Details: [docs/02-architecture.md](docs/02-architecture.md)
+### What each piece does
 
-## Project status
+| Piece | Role in plain language |
+|---|---|
+| **Trafiklab** | Source of schedules and live delay updates |
+| **Airflow** | Runs jobs on time, retries on failure, shows status in a UI |
+| **`data/raw/`** | Saves original downloads by date (we do not overwrite history) |
+| **PySpark** | Reads big GTFS files, joins schedule ↔ live updates, computes delays |
+| **PostgreSQL** | Stores clean tables for analysis (`dim_*` + `fact_trip_delay`) |
+| **Data quality** | Stops the pipeline if critical checks fail |
+| **Streamlit** | Interactive charts for routes, stops, hours, and map |
 
-| Week | Focus | Status |
+More detail: [`docs/02-architecture.md`](docs/02-architecture.md)
+
+### Star schema (how data is organized)
+
+We use a classic **Kimball star**:
+
+- **Dimensions** = “who / what / where / when” (route, stop, date, vehicle type)
+- **Fact** = “the measurement” — one delay observation
+
+**Fact grain:** one row in `fact_trip_delay` ≈ one trip + one stop + one service date + stop sequence.
+
+```
+        dim_date
+           │
+dim_route ─┼─ fact_trip_delay ─┬─ dim_stop
+           │                   │
+   dim_vehicle_type ───────────┘
+```
+
+DDL: [`sql/schema.sql`](sql/schema.sql)
+
+---
+
+## Project structure (folders)
+
+```
+├── dags/                     # Airflow DAG definitions (schedules + tasks)
+│   ├── dag_ingest_gtfs.py    # Daily static download
+│   ├── dag_realtime_gtfs.py  # Realtime snapshots every 15 min
+│   └── dag_gtfs_transform.py # Transform + data quality
+│
+├── jobs/
+│   ├── ingest/               # Download scripts for Trafiklab
+│   ├── transform/            # Helpers: time parsing, loaders, paths
+│   ├── transform_gtfs.py     # Main PySpark transform job
+│   └── validate_data_quality.py
+│
+├── dashboard/
+│   ├── app.py                # Streamlit UI
+│   └── queries.py            # Safe SQL for charts
+│
+├── sql/                      # Schema, seeds, indexes
+├── config/                   # Settings from .env
+├── scripts/                  # Bootstrap / verify helpers
+├── tests/                    # Unit + integration tests
+├── docs/                     # Goals, architecture, week checklists, ADRs
+├── data/raw/                 # Downloaded GTFS (gitignored)
+├── docker/                   # Airflow image
+├── docker-compose.yml        # Local stack
+└── transit_delay_pipeline_4week_plan.md
+```
+
+---
+
+## Tech stack
+
+| Layer | Tool | Why |
 |---|---|---|
-| 1 | Data access + Airflow ingestion | **Complete** |
-| 2 | PySpark transform + star schema load | **In progress** |
-| 3 | Streamlit dashboard + data quality + tests | Planned |
-| 4 | CI/CD + docs + demo video | CI scaffolded |
+| Orchestration | Apache Airflow | Schedules, retries, visible DAG runs |
+| Processing | PySpark | Handles large GTFS volumes |
+| Warehouse | PostgreSQL | Reliable SQL store for analytics |
+| Dashboard | Streamlit | Fast Python UI for charts/maps |
+| Containers | Docker Compose | Same stack on any machine |
+| Quality | Custom DQ checks + pytest | Fail fast + regression safety |
+| CI | GitHub Actions | Lint + tests on every push |
 
-**Week 1 checklist:** [docs/WEEK1_CHECKLIST.md](docs/WEEK1_CHECKLIST.md)  
-**Operations runbook:** [docs/week1-runbook.md](docs/week1-runbook.md)
+---
 
-## Quick Start
+## Quick start (run it locally)
 
 ### Prerequisites
 
 - [Docker Desktop](https://www.docker.com/products/docker-desktop/)
-- [Python 3.11+](https://www.python.org/downloads/)
-- Free [Trafiklab API keys](https://developer.trafiklab.se) (static + realtime — separate keys)
+- Python 3.11+
+- Free Trafiklab keys from [developer.trafiklab.se](https://developer.trafiklab.se)
 
-### 1. Configure (VS Code terminal)
+**Important:** Static and realtime feeds must be from the **same ID family**, or joins return 0 rows.  
+Recommended pairing:
+
+- Static: `STATIC_FEED=gtfs_sweden_3`
+- Realtime: `REALTIME_FEED=gtfs_sweden`  
+  (needs the “GTFS Sweden 3 Realtime” product key)
+
+See [`docs/decisions/003-ingest-feed-types.md`](docs/decisions/003-ingest-feed-types.md).
+
+### 1. Configure
 
 ```powershell
 cd E:\SUMMER_3RD_PROJECT
 copy .env.example .env
 ```
 
-Edit `.env`:
+Edit `.env` and set your keys (example):
 
 ```env
-TRAFIKLAB_STATIC_API_KEY=<GTFS Sweden 3 Static data key>
-TRAFIKLAB_REALTIME_API_KEY=<GTFS Regional Realtime key>
+TRAFIKLAB_STATIC_API_KEY=<your static key>
+TRAFIKLAB_REALTIME_API_KEY=<your sweden realtime key>
 STATIC_FEED=gtfs_sweden_3
-REALTIME_FEED=gtfs_regional
+REALTIME_FEED=gtfs_sweden
 OPERATOR=sl
+POSTGRES_HOST=localhost
+POSTGRES_PORT=5433
 ```
 
-### 2. Start Docker stack
+### 2. Start the stack
 
 ```powershell
 .\scripts\bootstrap.ps1
 ```
 
-| Service | URL |
+| Service | Where |
 |---|---|
 | Airflow UI | http://localhost:8081 (`admin` / `admin`) |
-| Postgres DW | `localhost:5433` (`transit` / `transit`) |
+| Analytics Postgres | `localhost:5433` (`transit` / `transit`, DB `transit_dw`) |
+| Streamlit (after Week 3) | http://localhost:8501 |
 
-### 3. Verify Week 1
+### 3. Run the pipeline (high level)
+
+1. Trigger **`gtfs_static_ingest`** and **`gtfs_realtime_ingest`** in Airflow (or let the schedule run).
+2. Trigger **`gtfs_transform`** for a date that has both static + realtime files.
+3. Open the dashboard:
 
 ```powershell
-docker compose exec airflow-scheduler python /opt/airflow/project/scripts/test_api_key.py --operator sl
-.\scripts\run_first_download.ps1
-.\scripts\verify_week1.ps1
+py -m pip install -r requirements.txt
+py -m streamlit run dashboard/app.py
 ```
 
-### 4. Trigger Airflow DAGs
+### 4. Run tests
 
-At http://localhost:8081 trigger:
+```powershell
+py -m ruff check .
+py -m pytest -q
+```
 
-- `gtfs_static_ingest` — daily static GTFS
-- `gtfs_realtime_ingest` — TripUpdates every 15 min
+---
 
-## Documentation
+## What we learned along the way (honest progress notes)
 
-| Document | Purpose |
+Building this was not only “happy path” coding. Real issues we hit and fixed include:
+
+1. **Feed family mismatch** — Sweden static IDs do not match regional realtime IDs → join returned 0 rows.  
+2. **Wrong database name** in Docker env (`transit` vs `transit_dw`).  
+3. **Silent key-map bug** with `psycopg2.execute_values` (needed `fetch=True`).  
+4. **Duplicate realtime keys** on full (non-sampled) loads → Postgres `CardinalityViolation`.  
+5. **Missing Airflow `fs_default` connection** for `FileSensor`.
+
+These are documented in [`docs/decisions/004-week2-transform-debugging.md`](docs/decisions/004-week2-transform-debugging.md) — useful for interviews (“how do you debug production-style pipelines?”).
+
+---
+
+## Documentation map
+
+| Document | What it explains |
 |---|---|
-| [01-project-purpose-and-goals.md](docs/01-project-purpose-and-goals.md) | Why we're building this, goals, success criteria |
-| [02-architecture.md](docs/02-architecture.md) | System design, data contracts, components |
-| [week1-runbook.md](docs/week1-runbook.md) | Day-to-day ingest operations |
-| [WEEK1_CHECKLIST.md](docs/WEEK1_CHECKLIST.md) | Week 1 completion gate |
-| [transit_delay_pipeline_4week_plan.md](transit_delay_pipeline_4week_plan.md) | Full 4-week build plan |
+| [docs/01-project-purpose-and-goals.md](docs/01-project-purpose-and-goals.md) | Purpose, goals, success criteria |
+| [docs/02-architecture.md](docs/02-architecture.md) | Components and data contracts |
+| [transit_delay_pipeline_4week_plan.md](transit_delay_pipeline_4week_plan.md) | Full 4-week plan |
+| [docs/WEEK1_CHECKLIST.md](docs/WEEK1_CHECKLIST.md) · [WEEK2](docs/WEEK2_CHECKLIST.md) · [WEEK3](docs/WEEK3_CHECKLIST.md) | Week completion gates |
+| [docs/week1-runbook.md](docs/week1-runbook.md) · [week2](docs/week2-runbook.md) · [week3](docs/week3-runbook.md) | How to operate each week |
+| [docs/decisions/](docs/decisions/) | Architecture Decision Records (ADRs) |
 
-## Project structure
+---
 
-```
-├── dags/                  # Airflow DAGs
-├── jobs/ingest/           # GTFS fetch + audit logging
-├── config/                # Settings and URL builders
-├── sql/                   # Star schema DDL
-├── scripts/               # Bootstrap, verify, test API
-├── docs/                  # Purpose, architecture, runbooks, ADRs
-├── tests/                 # pytest suite
-└── data/raw/              # Raw landing zone (gitignored)
-```
+## Project status (summary)
 
-## Development
+| Area | Status |
+|---|---|
+| Ingestion (Airflow) | Working |
+| Transform (PySpark → Postgres) | Working |
+| Data quality gate | Working |
+| Dashboard (local Streamlit) | Working |
+| Automated tests + CI | Working |
+| Public hosted demo / video | Week 4 |
 
-```powershell
-pip install -r requirements.txt
-pytest
-ruff check .
-```
-
-## Tech stack
-
-Apache Airflow · PySpark · PostgreSQL · Streamlit · Docker · GitHub Actions · pytest
+---
 
 ## License
 
