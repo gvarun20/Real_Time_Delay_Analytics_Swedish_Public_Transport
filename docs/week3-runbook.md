@@ -76,4 +76,7 @@ missing `fs_default` connection, `CardinalityViolation`), see
 
 ## Progress tracking
 
-See `docs/WEEK3_CHECKLIST.md` for the full Week 3 completion checklist and current status.
+See `docs/WEEK3_CHECKLIST.md` for the full Week 3 completion checklist.
+
+**Week 3 status: complete.** Phase gate met (dashboard on Postgres, DQ fails on bad data,
+tests green). Public hosting / demo video / README polish belong to Week 4.

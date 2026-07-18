@@ -47,3 +47,21 @@ def gtfs_rt_start_to_epoch(start_date: str | None, start_time: str | None) -> in
         dt = gtfs_time_to_datetime(service_date, start_time)
         return int(dt.replace(tzinfo=STOCKHOLM_TZ).timestamp())
     return int(start_time)
+
+
+def compute_delay_seconds(
+    scheduled_arrival: datetime | None,
+    actual_arrival: datetime | None,
+    delay_from_rt: int | None = None,
+) -> int | None:
+    """Compute delay_seconds for a trip-stop observation.
+
+    Prefer the GTFS-RT delay field when present. Otherwise derive from
+    actual − scheduled. Missing realtime → NULL (never coerce to 0).
+    Early arrivals are negative; late arrivals are positive.
+    """
+    if delay_from_rt is not None:
+        return int(delay_from_rt)
+    if scheduled_arrival is None or actual_arrival is None:
+        return None
+    return int((actual_arrival - scheduled_arrival).total_seconds())
