@@ -52,7 +52,16 @@ You get a public link like:
 
 `https://YOUR-APP-NAME.streamlit.app`
 
-Put that link in the README under **Live demo**.
+1. Put that link in the README under **Public websites**.
+2. Also paste it into `docs/index.html`:
+
+```js
+window.LIVE_DASHBOARD_URL = "https://YOUR-APP-NAME.streamlit.app";
+```
+
+3. Commit + push so the **GitHub Pages** landing page “Open live dashboard” button works.
+
+Landing page setup: [github-pages.md](github-pages.md).
 
 ## How to use the public site
 

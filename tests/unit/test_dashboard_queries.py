@@ -8,7 +8,8 @@ from __future__ import annotations
 
 from datetime import date
 
-from dashboard.queries import Filters, _where_clause
+from dashboard.filters import Filters
+from dashboard.queries import _where_clause
 
 
 def test_filters_computes_date_keys():

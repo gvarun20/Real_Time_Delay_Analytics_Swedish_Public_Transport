@@ -260,24 +260,38 @@ Then open **http://localhost:8501** in your browser.
 > **Public website:** deploy on Streamlit Community Cloud with a sample CSV — see
 > [docs/public-dashboard-deploy.md](docs/public-dashboard-deploy.md).
 
-## Live public website (Streamlit Cloud)
+## Public websites (two parts)
 
-The interactive dashboard (filters → KPIs → charts → map → stops) can be hosted for free on
-**Streamlit Community Cloud**. It does **not** use your local Postgres online. Instead it uses a
-sample export file so no API keys are exposed.
+| Site | What it is | Host |
+|---|---|---|
+| **Landing page** | Project story, architecture, 4-week plan, screenshot gallery, links | **GitHub Pages** (static HTML) |
+| **Interactive dashboard** | Filters → KPIs, charts, map, stops | **Streamlit Cloud** (runs Python) |
 
-**You still need to:**
+### 1) GitHub Pages landing page
 
-1. Export sample data: `py scripts/export_dashboard_sample.py`
-2. Commit + push the file `dashboard/sample_data/delay_facts.csv.gz`
-3. Deploy at [share.streamlit.io](https://share.streamlit.io) with:
+Source file: [`docs/index.html`](docs/index.html)
+
+Enable it: repo **Settings → Pages → Deploy from branch `main` / folder `/docs`**.  
+Guide: [docs/github-pages.md](docs/github-pages.md)
+
+Expected URL:
+
+`https://gvarun20.github.io/Real_Time_Delay_Analytics_Swedish_Public_Transport/`
+
+### 2) Live Streamlit dashboard
+
+Uses a **sample CSV** in the repo (no API keys, no home Postgres online).
+
+1. Sample data is already in `dashboard/sample_data/delay_facts.csv.gz` (replace later with `py scripts/export_dashboard_sample.py` when Docker Postgres is up)
+2. Deploy at [share.streamlit.io](https://share.streamlit.io):
    - Main file: `dashboard/app.py`
    - Requirements: `dashboard/requirements.txt`
+3. Paste the Streamlit URL into `window.LIVE_DASHBOARD_URL` in `docs/index.html`
 
-Full click-by-click guide: [docs/public-dashboard-deploy.md](docs/public-dashboard-deploy.md)
+Full guide: [docs/public-dashboard-deploy.md](docs/public-dashboard-deploy.md)
 
-**Live demo URL:** _add your Streamlit app link here after deploy_  
-Example format: `https://your-app-name.streamlit.app`
+**Landing page:** _enable GitHub Pages, then add the URL here_  
+**Live dashboard:** _add your Streamlit app link here after deploy_
 
 ---
 
