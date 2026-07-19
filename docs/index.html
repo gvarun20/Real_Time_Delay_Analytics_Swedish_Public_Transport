@@ -3,429 +3,503 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Swedish Transit Delay Pipeline</title>
+  <title>Swedish Transit Delay Pipeline — Project Site</title>
   <meta
     name="description"
-    content="Airflow + PySpark + PostgreSQL delay analytics for Swedish public transport (SL Stockholm), with an interactive Streamlit dashboard."
+    content="End-to-end data engineering pipeline: Trafiklab GTFS → Airflow → PySpark → PostgreSQL star schema → Streamlit dashboard for SL Stockholm delays."
   />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link
-    href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Sora:wght@400;500;600;700&display=swap"
+    href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,600;1,6..72,400&family=IBM+Plex+Mono:wght@400;500&display=swap"
     rel="stylesheet"
   />
   <style>
     :root {
-      --ink: #0e1a24;
-      --ink-soft: #243846;
-      --fog: #e8eef2;
-      --paper: #f5f8fa;
-      --ice: #7eb8c9;
-      --signal: #c45c26;
-      --line: rgba(14, 26, 36, 0.12);
-      --glow: rgba(126, 184, 201, 0.35);
-      --max: 1080px;
+      --ink: #07131c;
+      --ink-2: #1c3344;
+      --mist: #d5e3ea;
+      --snow: #f3f7f9;
+      --teal: #1f6f7a;
+      --teal-soft: #3a9aa6;
+      --copper: #b85c38;
+      --line: rgba(7, 19, 28, 0.14);
+      --max: 1120px;
+      --mono: "IBM Plex Mono", ui-monospace, monospace;
+      --display: "Syne", system-ui, sans-serif;
+      --body: "Newsreader", Georgia, serif;
     }
 
     * { box-sizing: border-box; }
     html { scroll-behavior: smooth; }
     body {
       margin: 0;
-      font-family: "Sora", system-ui, sans-serif;
       color: var(--ink);
+      font-family: var(--body);
+      font-size: 1.08rem;
+      line-height: 1.65;
       background:
-        radial-gradient(1200px 600px at 10% -10%, var(--glow), transparent 55%),
-        radial-gradient(900px 500px at 100% 0%, rgba(196, 92, 38, 0.12), transparent 50%),
-        linear-gradient(180deg, #dfe8ee 0%, var(--paper) 38%, var(--fog) 100%);
-      line-height: 1.55;
+        radial-gradient(900px 480px at 0% 0%, rgba(58, 154, 166, 0.22), transparent 60%),
+        radial-gradient(700px 420px at 100% 8%, rgba(184, 92, 56, 0.14), transparent 55%),
+        linear-gradient(180deg, #c9d8e1 0%, var(--snow) 32%, var(--mist) 100%);
     }
 
-    a { color: inherit; }
-    img { max-width: 100%; display: block; }
+    a { color: var(--teal); }
+    a:hover { color: var(--copper); }
+    code, .mono {
+      font-family: var(--mono);
+      font-size: 0.86em;
+    }
 
     .wrap {
-      width: min(var(--max), calc(100% - 2.5rem));
+      width: min(var(--max), calc(100% - 2.4rem));
       margin-inline: auto;
     }
 
-    /* —— Hero —— */
+    /* —— HERO —— */
     .hero {
       min-height: 100vh;
       min-height: 100dvh;
-      display: flex;
-      flex-direction: column;
-      justify-content: flex-end;
-      padding: 1.5rem 0 4rem;
+      display: grid;
+      align-content: space-between;
+      padding: 1.4rem 0 3.5rem;
       position: relative;
       overflow: hidden;
     }
 
-    .hero::before {
+    .hero-rail {
+      position: absolute;
+      inset: 12% -5% auto auto;
+      width: min(52vw, 520px);
+      height: min(52vw, 520px);
+      border-radius: 50%;
+      border: 1px solid rgba(7, 19, 28, 0.12);
+      background:
+        conic-gradient(from 210deg, transparent 0 62%, rgba(31, 111, 122, 0.18) 0 78%, transparent 0),
+        radial-gradient(circle at 40% 40%, rgba(255,255,255,0.55), transparent 65%);
+      animation: spin-slow 28s linear infinite;
+      pointer-events: none;
+    }
+    .hero-rail::after {
       content: "";
       position: absolute;
-      inset: 0;
-      background:
-        linear-gradient(120deg, transparent 40%, rgba(14, 26, 36, 0.04) 40.5%, transparent 41%),
-        linear-gradient(160deg, transparent 62%, rgba(14, 26, 36, 0.05) 62.5%, transparent 63%);
-      pointer-events: none;
-      animation: drift 18s ease-in-out infinite alternate;
+      inset: 18%;
+      border-radius: 50%;
+      border: 1px dashed rgba(7, 19, 28, 0.18);
+      animation: spin-slow 40s linear infinite reverse;
     }
-
-    @keyframes drift {
-      from { transform: translateX(-1.5%); }
-      to { transform: translateX(1.5%); }
-    }
+    @keyframes spin-slow { to { transform: rotate(360deg); } }
 
     .nav {
       display: flex;
       justify-content: space-between;
-      align-items: center;
       gap: 1rem;
-      margin-bottom: auto;
-      padding-top: 0.25rem;
+      align-items: center;
       position: relative;
-      z-index: 1;
-    }
-
-    .nav-brand {
+      z-index: 2;
+      font-family: var(--display);
+      font-size: 0.78rem;
       font-weight: 600;
-      font-size: 0.92rem;
-      letter-spacing: 0.02em;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
     }
-
-    .nav-links {
-      display: flex;
-      gap: 1.25rem;
-      font-size: 0.85rem;
-      font-weight: 500;
-    }
-
-    .nav-links a {
+    .nav a {
+      color: var(--ink-2);
       text-decoration: none;
-      opacity: 0.8;
+      margin-left: 1rem;
+      opacity: 0.78;
     }
-    .nav-links a:hover { opacity: 1; }
+    .nav a:hover { opacity: 1; color: var(--ink); }
 
-    .hero-inner {
+    .hero-copy {
       position: relative;
-      z-index: 1;
-      max-width: 42rem;
-      padding-bottom: 1rem;
-      animation: rise 0.9s ease-out both;
+      z-index: 2;
+      max-width: 40rem;
+      animation: up 0.85s ease-out both;
     }
-
-    @keyframes rise {
-      from { opacity: 0; transform: translateY(18px); }
+    @keyframes up {
+      from { opacity: 0; transform: translateY(22px); }
       to { opacity: 1; transform: translateY(0); }
     }
 
-    .brand-mark {
-      font-family: "Fraunces", Georgia, serif;
-      font-size: clamp(2.6rem, 7vw, 4.4rem);
-      font-weight: 700;
-      line-height: 1.05;
-      letter-spacing: -0.03em;
-      margin: 0 0 1rem;
+    .brand {
+      font-family: var(--display);
+      font-weight: 800;
+      font-size: clamp(2.8rem, 8vw, 5rem);
+      line-height: 0.95;
+      letter-spacing: -0.04em;
+      margin: 0 0 1.1rem;
+    }
+    .brand span {
+      display: block;
+      color: var(--teal);
     }
 
     .hero h1 {
-      font-family: "Sora", sans-serif;
-      font-size: clamp(1.15rem, 2.4vw, 1.45rem);
-      font-weight: 500;
-      line-height: 1.35;
-      margin: 0 0 0.85rem;
-      color: var(--ink-soft);
+      font-family: var(--body);
+      font-weight: 400;
+      font-size: clamp(1.2rem, 2.4vw, 1.45rem);
+      font-style: italic;
+      color: var(--ink-2);
+      margin: 0 0 1rem;
       max-width: 34rem;
+      line-height: 1.4;
     }
 
-    .hero p.lead {
-      margin: 0 0 1.75rem;
-      font-size: 1.02rem;
+    .hero .lead {
+      margin: 0 0 1.8rem;
       max-width: 32rem;
-      color: var(--ink-soft);
+      color: var(--ink-2);
+      font-size: 1.05rem;
     }
 
     .cta-row {
       display: flex;
       flex-wrap: wrap;
-      gap: 0.75rem;
+      gap: 0.7rem;
     }
 
     .btn {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      padding: 0.85rem 1.25rem;
-      border-radius: 0.35rem;
-      font-weight: 600;
-      font-size: 0.92rem;
-      text-decoration: none;
-      border: 1.5px solid transparent;
-      transition: transform 0.15s ease, background 0.15s ease, color 0.15s ease;
-    }
-    .btn:hover { transform: translateY(-1px); }
-
-    .btn-primary {
-      background: var(--ink);
-      color: #f4f7f9;
-    }
-    .btn-primary:hover { background: #1a2d3c; }
-
-    .btn-secondary {
-      background: transparent;
-      border-color: var(--ink);
-      color: var(--ink);
-    }
-    .btn-secondary:hover { background: rgba(14, 26, 36, 0.06); }
-
-    .btn-muted {
-      background: rgba(255, 255, 255, 0.55);
-      border-color: var(--line);
-      color: var(--ink-soft);
-      font-weight: 500;
-    }
-
-    /* —— Sections —— */
-    section {
-      padding: 4.5rem 0;
-    }
-
-    section + section {
-      border-top: 1px solid var(--line);
-    }
-
-    .section-label {
-      font-size: 0.75rem;
-      font-weight: 600;
-      letter-spacing: 0.12em;
-      text-transform: uppercase;
-      color: var(--signal);
-      margin: 0 0 0.6rem;
-    }
-
-    h2 {
-      font-family: "Fraunces", Georgia, serif;
-      font-size: clamp(1.7rem, 3.5vw, 2.35rem);
+      font-family: var(--display);
       font-weight: 700;
-      letter-spacing: -0.02em;
-      line-height: 1.15;
-      margin: 0 0 0.85rem;
+      font-size: 0.88rem;
+      letter-spacing: 0.02em;
+      text-decoration: none;
+      padding: 0.9rem 1.2rem;
+      border-radius: 999px;
+      border: 1.5px solid transparent;
+      transition: transform 0.15s ease, background 0.15s ease;
     }
+    .btn:hover { transform: translateY(-2px); }
+    .btn-dark { background: var(--ink); color: var(--snow); }
+    .btn-dark:hover { color: var(--snow); background: #122636; }
+    .btn-line { background: transparent; border-color: var(--ink); color: var(--ink); }
+    .btn-line:hover { color: var(--ink); background: rgba(7,19,28,0.05); }
+    .btn-soft { background: rgba(255,255,255,0.55); color: var(--ink-2); border-color: var(--line); }
 
-    .section-intro {
-      max-width: 38rem;
+    /* —— SECTIONS —— */
+    section { padding: 4.75rem 0; border-top: 1px solid var(--line); }
+    .label {
+      font-family: var(--display);
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: var(--copper);
+      margin: 0 0 0.55rem;
+    }
+    h2 {
+      font-family: var(--display);
+      font-weight: 800;
+      font-size: clamp(1.85rem, 4vw, 2.7rem);
+      letter-spacing: -0.03em;
+      line-height: 1.05;
+      margin: 0 0 0.9rem;
+    }
+    .intro {
+      max-width: 40rem;
       margin: 0 0 2rem;
-      color: var(--ink-soft);
+      color: var(--ink-2);
+      font-size: 1.12rem;
     }
 
-    .split {
+    .grid-2 {
       display: grid;
       gap: 2rem;
     }
-    @media (min-width: 800px) {
-      .split-2 { grid-template-columns: 1.1fr 0.9fr; align-items: start; }
+    @media (min-width: 860px) {
+      .grid-2 { grid-template-columns: 1.05fr 0.95fr; }
     }
 
-    .plain-list {
-      margin: 0;
-      padding-left: 1.15rem;
-      color: var(--ink-soft);
-    }
-    .plain-list li { margin-bottom: 0.55rem; }
-
-    /* Architecture flow */
-    .flow {
+    .stat-strip {
       display: grid;
-      gap: 0.65rem;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 0.75rem;
+    }
+    @media (min-width: 720px) {
+      .stat-strip { grid-template-columns: repeat(4, 1fr); }
+    }
+    .stat {
+      padding: 1.1rem 1rem;
+      background: rgba(255,255,255,0.45);
+      border-top: 3px solid var(--teal);
+    }
+    .stat b {
+      display: block;
+      font-family: var(--display);
+      font-size: 1.55rem;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      line-height: 1;
+      margin-bottom: 0.35rem;
+    }
+    .stat span {
+      font-size: 0.92rem;
+      color: var(--ink-2);
+    }
+
+    /* Workflow timeline */
+    .timeline {
+      position: relative;
       margin: 0;
       padding: 0;
       list-style: none;
     }
-    .flow li {
+    .timeline::before {
+      content: "";
+      position: absolute;
+      left: 0.85rem;
+      top: 0.4rem;
+      bottom: 0.4rem;
+      width: 2px;
+      background: linear-gradient(var(--teal), var(--copper));
+    }
+    .timeline li {
+      position: relative;
+      padding: 0 0 1.5rem 2.6rem;
+      animation: up 0.7s ease-out both;
+    }
+    .timeline li:last-child { padding-bottom: 0; }
+    .timeline li::before {
+      content: "";
+      position: absolute;
+      left: 0.45rem;
+      top: 0.45rem;
+      width: 0.85rem;
+      height: 0.85rem;
+      border-radius: 50%;
+      background: var(--snow);
+      border: 2px solid var(--teal);
+      box-shadow: 0 0 0 4px rgba(31, 111, 122, 0.12);
+    }
+    .timeline .who {
+      font-family: var(--mono);
+      font-size: 0.78rem;
+      font-weight: 500;
+      color: var(--teal);
+      margin-bottom: 0.2rem;
+    }
+    .timeline h3 {
+      font-family: var(--display);
+      font-size: 1.15rem;
+      margin: 0 0 0.35rem;
+      letter-spacing: -0.02em;
+    }
+    .timeline p {
+      margin: 0;
+      color: var(--ink-2);
+      font-size: 1rem;
+    }
+
+    /* Schema */
+    .schema {
+      display: grid;
+      gap: 0.65rem;
+      font-family: var(--mono);
+      font-size: 0.82rem;
+    }
+    .schema .fact {
+      padding: 1rem 1.1rem;
+      background: var(--ink);
+      color: var(--snow);
+    }
+    .schema .dims {
+      display: grid;
+      gap: 0.5rem;
+    }
+    @media (min-width: 700px) {
+      .schema .dims { grid-template-columns: repeat(2, 1fr); }
+    }
+    .schema .dims div {
+      padding: 0.85rem 1rem;
+      background: rgba(255,255,255,0.55);
+      border: 1px solid var(--line);
+    }
+    .schema strong { display: block; margin-bottom: 0.25rem; font-family: var(--display); font-size: 0.95rem; }
+    .schema span { color: var(--ink-2); }
+    .schema .fact span { color: rgba(243,247,249,0.75); }
+
+    /* Weeks */
+    .weeks { display: grid; gap: 1rem; }
+    @media (min-width: 800px) { .weeks { grid-template-columns: 1fr 1fr; } }
+    .week {
+      padding: 1.35rem 1.35rem 1.45rem;
+      background: rgba(255,255,255,0.5);
+      border: 1px solid var(--line);
+      border-radius: 0.2rem;
+      position: relative;
+      overflow: hidden;
+    }
+    .week::after {
+      content: attr(data-week);
+      position: absolute;
+      right: 0.7rem;
+      top: 0.35rem;
+      font-family: var(--display);
+      font-weight: 800;
+      font-size: 3.2rem;
+      letter-spacing: -0.05em;
+      color: rgba(31, 111, 122, 0.12);
+      line-height: 1;
+      pointer-events: none;
+    }
+    .week h3 {
+      font-family: var(--display);
+      font-size: 1.15rem;
+      margin: 0 0 0.45rem;
+      position: relative;
+    }
+    .week ul {
+      margin: 0.6rem 0 0;
+      padding-left: 1.1rem;
+      color: var(--ink-2);
+      font-size: 0.98rem;
+    }
+    .week li { margin-bottom: 0.3rem; }
+    .badge {
+      display: inline-block;
+      font-family: var(--display);
+      font-size: 0.68rem;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--copper);
+      margin-bottom: 0.4rem;
+    }
+
+    /* Docs library */
+    .docs {
+      display: grid;
+      gap: 0.65rem;
+    }
+    @media (min-width: 760px) {
+      .docs { grid-template-columns: 1fr 1fr; }
+    }
+    .doc {
+      display: block;
+      text-decoration: none;
+      color: inherit;
+      padding: 1.05rem 1.15rem;
+      background: rgba(255,255,255,0.48);
+      border-left: 3px solid var(--teal-soft);
+      transition: background 0.15s ease, border-color 0.15s ease;
+    }
+    .doc:hover {
+      background: rgba(255,255,255,0.8);
+      border-color: var(--copper);
+      color: inherit;
+    }
+    .doc .kind {
+      font-family: var(--mono);
+      font-size: 0.72rem;
+      color: var(--teal);
+      margin-bottom: 0.2rem;
+    }
+    .doc h3 {
+      font-family: var(--display);
+      font-size: 1.02rem;
+      margin: 0 0 0.3rem;
+    }
+    .doc p {
+      margin: 0;
+      font-size: 0.95rem;
+      color: var(--ink-2);
+    }
+
+    /* Dashboard how-to */
+    .howto {
+      display: grid;
+      gap: 0.75rem;
+      counter-reset: step;
+    }
+    .howto article {
       display: grid;
       grid-template-columns: auto 1fr;
       gap: 0.9rem;
-      align-items: start;
-      padding: 0.95rem 1.05rem;
-      background: rgba(255, 255, 255, 0.55);
+      padding: 1rem 1.1rem;
+      background: rgba(255,255,255,0.5);
       border: 1px solid var(--line);
-      border-radius: 0.4rem;
-      animation: rise 0.7s ease-out both;
     }
-    .flow li:nth-child(2) { animation-delay: 0.08s; }
-    .flow li:nth-child(3) { animation-delay: 0.16s; }
-    .flow li:nth-child(4) { animation-delay: 0.24s; }
-    .flow li:nth-child(5) { animation-delay: 0.32s; }
-
-    .step-num {
-      font-family: "Fraunces", Georgia, serif;
-      font-weight: 700;
-      font-size: 1.2rem;
-      color: var(--ice);
+    .howto article::before {
+      counter-increment: step;
+      content: counter(step, decimal-leading-zero);
+      font-family: var(--display);
+      font-weight: 800;
+      font-size: 1.3rem;
+      color: var(--teal);
       line-height: 1;
-      padding-top: 0.15rem;
     }
-    .flow strong { display: block; margin-bottom: 0.2rem; }
-    .flow span { color: var(--ink-soft); font-size: 0.92rem; }
+    .howto h3 {
+      font-family: var(--display);
+      font-size: 1.02rem;
+      margin: 0 0 0.25rem;
+    }
+    .howto p { margin: 0; color: var(--ink-2); font-size: 0.98rem; }
 
-    /* Weeks */
-    .weeks {
-      display: grid;
-      gap: 1rem;
-    }
-    @media (min-width: 720px) {
-      .weeks { grid-template-columns: repeat(2, 1fr); }
-    }
-    .week {
-      padding: 1.25rem 1.3rem 1.35rem;
-      border-left: 3px solid var(--ice);
-      background: rgba(255, 255, 255, 0.5);
-    }
-    .week h3 {
-      margin: 0 0 0.35rem;
-      font-size: 1.05rem;
-    }
-    .week p {
+    .bugs {
       margin: 0;
-      font-size: 0.92rem;
-      color: var(--ink-soft);
+      padding-left: 1.15rem;
+      color: var(--ink-2);
     }
-    .week .status {
-      display: inline-block;
-      margin-top: 0.65rem;
-      font-size: 0.72rem;
-      font-weight: 600;
-      letter-spacing: 0.06em;
-      text-transform: uppercase;
-      color: var(--signal);
-    }
-
-    /* Demo / screenshots */
-    .shots {
-      display: grid;
-      gap: 1rem;
-    }
-    @media (min-width: 800px) {
-      .shots { grid-template-columns: repeat(2, 1fr); }
-    }
-    .shot {
-      min-height: 200px;
-      border: 1px solid var(--line);
-      border-radius: 0.4rem;
-      background:
-        linear-gradient(145deg, rgba(255,255,255,0.7), rgba(126,184,201,0.12)),
-        repeating-linear-gradient(
-          -12deg,
-          transparent,
-          transparent 10px,
-          rgba(14, 26, 36, 0.03) 10px,
-          rgba(14, 26, 36, 0.03) 11px
-        );
-      padding: 1.25rem;
-      display: flex;
-      flex-direction: column;
-      justify-content: flex-end;
-    }
-    .shot h3 {
-      margin: 0 0 0.35rem;
-      font-size: 1rem;
-    }
-    .shot p {
-      margin: 0;
-      font-size: 0.88rem;
-      color: var(--ink-soft);
-    }
-    .shot img {
-      border-radius: 0.3rem;
-      margin-bottom: 0.85rem;
-      width: 100%;
-      height: auto;
-      border: 1px solid var(--line);
-    }
-
-    .callout {
-      margin-top: 1.5rem;
-      padding: 1.1rem 1.25rem;
-      border: 1px dashed rgba(196, 92, 38, 0.45);
-      background: rgba(196, 92, 38, 0.06);
-      font-size: 0.92rem;
-      color: var(--ink-soft);
-    }
-    .callout strong { color: var(--ink); }
-
-    .stack {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 0.5rem;
-      margin: 0;
-      padding: 0;
-      list-style: none;
-    }
-    .stack li {
-      padding: 0.4rem 0.7rem;
-      font-size: 0.82rem;
-      font-weight: 500;
-      background: rgba(14, 26, 36, 0.07);
-      border-radius: 0.25rem;
-    }
+    .bugs li { margin-bottom: 0.55rem; }
 
     footer {
       padding: 2.5rem 0 3rem;
       border-top: 1px solid var(--line);
-      font-size: 0.88rem;
-      color: var(--ink-soft);
+      font-size: 0.95rem;
+      color: var(--ink-2);
     }
     footer .wrap {
       display: flex;
       flex-wrap: wrap;
       gap: 1rem;
       justify-content: space-between;
-      align-items: baseline;
     }
-    footer a { font-weight: 500; }
+    footer a { font-family: var(--display); font-weight: 600; font-size: 0.9rem; }
 
-    @media (max-width: 640px) {
+    @media (max-width: 700px) {
       .nav-links { display: none; }
-      .hero { padding-bottom: 3rem; }
+      .hero-rail { opacity: 0.45; }
     }
   </style>
 </head>
 <body>
-  <!--
-    Update LIVE_DASHBOARD_URL after Streamlit Cloud deploy.
-    GitHub Pages URL (after enabling Pages on /docs):
-    https://gvarun20.github.io/Real_Time_Delay_Analytics_Swedish_Public_Transport/
-  -->
   <script>
     window.LIVE_DASHBOARD_URL =
       "https://realtime--delay--analytics--swedish--publictransport.streamlit.app/";
     window.REPO_URL =
       "https://github.com/gvarun20/Real_Time_Delay_Analytics_Swedish_Public_Transport";
+    window.DOCS_BASE =
+      "https://github.com/gvarun20/Real_Time_Delay_Analytics_Swedish_Public_Transport/blob/main";
   </script>
 
   <header class="hero">
+    <div class="hero-rail" aria-hidden="true"></div>
     <div class="wrap">
-      <nav class="nav" aria-label="Primary">
-        <div class="nav-brand">Transit Delay Pipeline</div>
+      <nav class="nav">
+        <div>Transit Delay Pipeline</div>
         <div class="nav-links">
           <a href="#problem">Problem</a>
-          <a href="#architecture">Architecture</a>
-          <a href="#plan">4 weeks</a>
-          <a href="#demo">Dashboard</a>
+          <a href="#workflow">Workflow</a>
+          <a href="#weeks">4 weeks</a>
+          <a href="#docs">Docs</a>
+          <a href="#dashboard">Dashboard</a>
         </div>
       </nav>
-
-      <div class="hero-inner">
-        <p class="brand-mark">Swedish Transit<br />Delay Pipeline</p>
-        <h1>From raw GTFS feeds to delay insights — orchestrated, modeled, and shown in a live dashboard.</h1>
+    </div>
+    <div class="wrap">
+      <div class="hero-copy">
+        <p class="brand">Swedish Transit<br /><span>Delay Pipeline</span></p>
+        <h1>A full data engineering story: from Trafiklab GTFS feeds to delay analytics you can filter and explore.</h1>
         <p class="lead">
-          An end-to-end data engineering project for SL (Stockholm): Airflow, PySpark,
-          a Kimball star schema in PostgreSQL, quality checks, and an interactive dashboard.
+          Built in four weeks for SL (Stockholm): Airflow orchestration, PySpark transforms,
+          a Kimball star schema in PostgreSQL, automated data quality, tests in CI,
+          and a public interactive dashboard.
         </p>
         <div class="cta-row">
-          <a class="btn btn-primary" id="cta-live" href="#demo">Open live dashboard</a>
-          <a class="btn btn-secondary" id="cta-repo" href="#">View code on GitHub</a>
-          <a class="btn btn-muted" href="#plan">See the 4-week plan</a>
+          <a class="btn btn-dark" id="cta-live" href="#">Open live dashboard</a>
+          <a class="btn btn-line" id="cta-repo" href="#">View source on GitHub</a>
+          <a class="btn btn-soft" href="#workflow">See the full workflow</a>
         </div>
       </div>
     </div>
@@ -433,195 +507,304 @@
 
   <main>
     <section id="problem">
-      <div class="wrap split split-2">
-        <div>
-          <p class="section-label">The problem</p>
-          <h2>Schedules and live delays live in different files.</h2>
-          <p class="section-intro">
-            Swedish public transport publishes planned times (GTFS static) and live arrival
-            updates (GTFS-RT). Alone, they do not easily answer: which routes are late,
-            which stops hurt most at rush hour, or how delays change by hour and day.
-          </p>
-          <ul class="plain-list">
-            <li>Need reliable, scheduled downloads — not one-off manual pulls</li>
-            <li>Need a clean join of schedule ↔ realtime on trip and stop IDs</li>
-            <li>Need an analytical model analysts can query</li>
-            <li>Need a UI where you select filters and see results</li>
-          </ul>
-        </div>
-        <div>
-          <p class="section-label">The goal</p>
-          <h2>A production-style pipeline at zero cloud cost.</h2>
-          <p class="section-intro">
-            Build the full path: ingest → transform → warehouse → quality gate → dashboard —
-            runnable locally in Docker, with tests in CI, and a public project page for demos.
-          </p>
-          <ul class="stack" aria-label="Tech stack">
-            <li>Apache Airflow</li>
-            <li>PySpark</li>
-            <li>PostgreSQL</li>
-            <li>Streamlit</li>
-            <li>Docker</li>
-            <li>GitHub Actions</li>
-            <li>Trafiklab GTFS</li>
-          </ul>
+      <div class="wrap">
+        <p class="label">Why this project exists</p>
+        <h2>Schedules and live delays were never meant to sit in separate folders forever.</h2>
+        <div class="grid-2">
+          <div>
+            <p class="intro">
+              Swedish transit publishes <strong>planned times</strong> (GTFS static) and
+              <strong>live arrival updates</strong> (GTFS-RT). Analysts still need answers like:
+              which routes run late, which stops are worst at rush hour, and how delays change
+              by hour and weekday.
+            </p>
+            <p class="intro" style="margin-bottom:0">
+              This project builds the missing production-style path:
+              ingest on a schedule → join → model → quality-check → serve charts —
+              at <strong>$0 cloud cost</strong> using Docker locally, with a public demo online.
+            </p>
+          </div>
+          <div class="stat-strip" style="align-content:start">
+            <div class="stat"><b>4</b><span>week delivery plan with phase gates</span></div>
+            <div class="stat"><b>3</b><span>Airflow DAGs (static, realtime, transform)</span></div>
+            <div class="stat"><b>60+</b><span>pytest tests (unit + integration)</span></div>
+            <div class="stat"><b>0$</b><span>required cloud spend for the stack</span></div>
+          </div>
         </div>
       </div>
     </section>
 
-    <section id="architecture">
+    <section id="workflow">
       <div class="wrap">
-        <p class="section-label">Architecture</p>
-        <h2>How data moves through the system</h2>
-        <p class="section-intro">
-          Think of it as a factory line: download → store raw files → transform → curated tables → charts.
+        <p class="label">Designed workflow</p>
+        <h2>The pipeline, end to end</h2>
+        <p class="intro">
+          Every stage has a clear job. Raw files are kept immutable. Transforms write curated
+          warehouse tables. The dashboard only reads — never writes.
         </p>
-        <ol class="flow">
+
+        <ol class="timeline">
           <li>
-            <span class="step-num">01</span>
-            <div>
-              <strong>Trafiklab APIs</strong>
-              <span>Static GTFS zip + realtime TripUpdates for SL Stockholm.</span>
-            </div>
+            <div class="who">SOURCE · Trafiklab</div>
+            <h3>Open GTFS static + GTFS-RT TripUpdates</h3>
+            <p>
+              Static Sweden feed + Sweden realtime feed for operator <code>sl</code>.
+              Same ID family is required so joins match (documented in ADR-003).
+            </p>
           </li>
           <li>
-            <span class="step-num">02</span>
-            <div>
-              <strong>Airflow DAGs</strong>
-              <span>Scheduled ingest with retries; files land under <code>data/raw/</code>.</span>
-            </div>
+            <div class="who">INGEST · Airflow</div>
+            <h3><code>gtfs_static_ingest</code> + <code>gtfs_realtime_ingest</code></h3>
+            <p>
+              Daily static zip and 15-minute realtime snapshots land under
+              <code>data/raw/static/{date}/</code> and <code>data/raw/realtime/{date}/{time}/</code>
+              with <code>metadata.json</code> sidecars. Retries + failure callbacks included.
+            </p>
           </li>
           <li>
-            <span class="step-num">03</span>
-            <div>
-              <strong>PySpark transform</strong>
-              <span>Join schedule with live updates; compute <code>delay_seconds</code>.</span>
-            </div>
+            <div class="who">TRANSFORM · PySpark</div>
+            <h3><code>gtfs_transform</code> → <code>jobs/transform_gtfs.py</code></h3>
+            <p>
+              Filter SL trips, join stop times with TripUpdates, compute
+              <code>delay_seconds</code>, upsert dimensions, load
+              <code>fact_trip_delay</code>. Then run the data quality gate.
+            </p>
           </li>
           <li>
-            <span class="step-num">04</span>
-            <div>
-              <strong>PostgreSQL star schema</strong>
-              <span>Dimensions (date, route, stop, vehicle type) + <code>fact_trip_delay</code>.</span>
-            </div>
+            <div class="who">WAREHOUSE · PostgreSQL</div>
+            <h3>Kimball star schema in <code>transit_dw</code></h3>
+            <p>
+              Grain: one fact row ≈ one trip × stop × service date × stop sequence.
+              Tables: <code>dim_date</code>, <code>dim_route</code>, <code>dim_stop</code>,
+              <code>dim_vehicle_type</code>, <code>fact_trip_delay</code>, <code>pipeline_runs</code>.
+            </p>
           </li>
           <li>
-            <span class="step-num">05</span>
-            <div>
-              <strong>Dashboard + quality checks</strong>
-              <span>Streamlit UI for KPIs, charts, map, and stops; DQ task fails on bad data.</span>
-            </div>
+            <div class="who">QUALITY · validate_data_quality</div>
+            <h3>Fail the DAG on critical errors; warn on outliers</h3>
+            <p>
+              Checks include non-empty facts, null trip IDs, delay bounds, null-delay rate,
+              duplicate grain, and static file freshness. Results written to
+              <code>pipeline_runs.dq_status</code>.
+            </p>
+          </li>
+          <li>
+            <div class="who">SERVE · Streamlit</div>
+            <h3>Interactive analytics UI (public + local)</h3>
+            <p>
+              Filters for date / route / vehicle type. KPIs, route bars, hour×weekday heatmap,
+              stop map, worst-stops table, delay histogram. Public site uses a sample export;
+              local mode reads live Postgres.
+            </p>
           </li>
         </ol>
       </div>
     </section>
 
-    <section id="plan">
+    <section id="schema">
+      <div class="wrap grid-2">
+        <div>
+          <p class="label">Data model</p>
+          <h2>Star schema at the center</h2>
+          <p class="intro">
+            Dimensions answer who / what / where / when. The fact table stores the measurement:
+            scheduled vs actual arrival and delay in seconds.
+          </p>
+          <p class="intro" style="margin-bottom:0">
+            DDL lives in <code>sql/schema.sql</code>. Seeds and indexes ship with Docker Postgres init.
+          </p>
+        </div>
+        <div class="schema" aria-label="Star schema summary">
+          <div class="fact">
+            <strong>fact_trip_delay</strong>
+            <span>trip_id · stop_sequence · scheduled_arrival · actual_arrival · delay_seconds · FKs</span>
+          </div>
+          <div class="dims">
+            <div><strong>dim_date</strong><span>calendar, weekend flags</span></div>
+            <div><strong>dim_route</strong><span>route names + operator</span></div>
+            <div><strong>dim_stop</strong><span>name, lat, lon</span></div>
+            <div><strong>dim_vehicle_type</strong><span>Bus, Metro, Rail…</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="weeks">
       <div class="wrap">
-        <p class="section-label">Delivery plan</p>
-        <h2>Four weeks, one phase gate each</h2>
-        <p class="section-intro">
-          We only moved forward when the week’s gate was green — so progress stayed honest and testable.
+        <p class="label">How we divided the work</p>
+        <h2>Four weeks. Four phase gates.</h2>
+        <p class="intro">
+          We did not “do everything at once.” Each week had a clear outcome. The next week
+          started only after the gate passed.
         </p>
         <div class="weeks">
-          <article class="week">
+          <article class="week" data-week="01">
+            <div class="badge">Complete</div>
             <h3>Week 1 — Foundation</h3>
-            <p>API access, Docker, Airflow, raw landing zone for static + realtime feeds.</p>
-            <span class="status">Complete</span>
+            <p>Get the data reliably into a deterministic landing zone.</p>
+            <ul>
+              <li>Trafiklab API keys + feed configuration</li>
+              <li>Docker Compose: Airflow + analytics Postgres</li>
+              <li>DAGs: static daily + realtime every 15 min</li>
+              <li>Runbook + Week 1 checklist</li>
+            </ul>
           </article>
-          <article class="week">
+          <article class="week" data-week="02">
+            <div class="badge">Complete</div>
             <h3>Week 2 — Transformation</h3>
-            <p>Star schema, PySpark job, load delay facts; hard bugs fixed and documented.</p>
-            <span class="status">Complete</span>
+            <p>Turn raw GTFS into warehouse facts.</p>
+            <ul>
+              <li>Star schema DDL + seeds</li>
+              <li>PySpark transform job + Airflow wiring</li>
+              <li>Real delay rows loaded for full service dates</li>
+              <li>Hard debugging documented (feed mismatch, upserts, duplicates…)</li>
+            </ul>
           </article>
-          <article class="week">
+          <article class="week" data-week="03">
+            <div class="badge">Complete</div>
             <h3>Week 3 — Serving layer</h3>
-            <p>Streamlit dashboard, data quality gate, expanded pytest suite + CI Postgres.</p>
-            <span class="status">Complete</span>
+            <p>Make the data useful and trustworthy.</p>
+            <ul>
+              <li>Streamlit dashboard (KPIs, charts, map, stops)</li>
+              <li>Data quality task after transform</li>
+              <li>60+ tests; CI Postgres service container</li>
+              <li>Week 3 checklist + runbook</li>
+            </ul>
           </article>
-          <article class="week">
-            <h3>Week 4 — Polish &amp; public demo</h3>
-            <p>This landing page, Streamlit Cloud sample deploy, README, screenshots, demo video.</p>
-            <span class="status">In progress</span>
+          <article class="week" data-week="04">
+            <div class="badge">In progress</div>
+            <h3>Week 4 — Public polish</h3>
+            <p>Make the project portfolio-ready.</p>
+            <ul>
+              <li>This GitHub Pages project site</li>
+              <li>Public Streamlit Cloud demo (sample data)</li>
+              <li>README rewrite + deploy guides</li>
+              <li>Screenshots / demo video still optional upgrades</li>
+            </ul>
           </article>
         </div>
       </div>
     </section>
 
-    <section id="demo">
+    <section id="lessons">
+      <div class="wrap grid-2">
+        <div>
+          <p class="label">Real engineering, not a happy-path demo</p>
+          <h2>Bugs we hit — and documented</h2>
+          <p class="intro">
+            Week 2 alone uncovered stacked failures. Each fix is written down so the next person
+            (or an interviewer) can follow the reasoning.
+          </p>
+        </div>
+        <ul class="bugs">
+          <li><strong>Feed ID mismatch</strong> — Sweden static IDs ≠ regional realtime IDs → 0 join rows.</li>
+          <li><strong>Wrong Postgres DB name</strong> in Docker env (<code>transit</code> vs <code>transit_dw</code>).</li>
+          <li><strong>Silent RETURNING drop</strong> in <code>execute_values</code> without <code>fetch=True</code>.</li>
+          <li><strong>CardinalityViolation</strong> from duplicate realtime keys on full loads.</li>
+          <li><strong>Missing <code>fs_default</code></strong> connection broke Airflow FileSensor.</li>
+        </ul>
+      </div>
+    </section>
+
+    <section id="docs">
       <div class="wrap">
-        <p class="section-label">Interactive dashboard</p>
-        <h2>Select filters. See delay results.</h2>
-        <p class="section-intro">
-          The public app lets you choose a date range, route, and vehicle type, then shows
-          KPIs, route bars, a heatmap, a stop map, and the worst stops table.
+        <p class="label">Documentation library</p>
+        <h2>Everything we wrote down</h2>
+        <p class="intro">
+          Open any document on GitHub. These are the project’s paper trail: goals, architecture,
+          week gates, runbooks, and architecture decision records.
         </p>
-
-        <div class="cta-row" style="margin-bottom: 1.75rem;">
-          <a class="btn btn-primary" id="cta-live-2" href="#">Open live dashboard</a>
-          <a class="btn btn-secondary" id="cta-repo-2" href="#">GitHub repository</a>
+        <div class="docs" id="doc-grid">
+          <!-- filled by script from DOCS_BASE -->
         </div>
+      </div>
+    </section>
 
-        <div class="shots">
-          <figure class="shot">
-            <img
-              src="demo/kpis.png"
-              alt="Dashboard KPI cards"
-              onerror="this.style.display='none'"
-            />
-            <h3>KPIs</h3>
-            <p>Median delay, % on-time, trips observed, and the worst route — your quick health check.</p>
-          </figure>
-          <figure class="shot">
-            <img
-              src="demo/map-stops.png"
-              alt="Map of stops colored by delay"
-              onerror="this.style.display='none'"
-            />
-            <h3>Map &amp; stops</h3>
-            <p>Stops colored by average delay; table ranks the worst locations with observation counts.</p>
-          </figure>
-          <figure class="shot">
-            <img
-              src="demo/routes.png"
-              alt="Average delay by route chart"
-              onerror="this.style.display='none'"
-            />
-            <h3>Routes &amp; heatmap</h3>
-            <p>Which lines run late, and whether rush hour or certain weekdays stand out.</p>
-          </figure>
-          <figure class="shot">
-            <img
-              src="demo/airflow.png"
-              alt="Airflow DAG run"
-              onerror="this.style.display='none'"
-            />
-            <h3>Pipeline behind the UI</h3>
-            <p>Airflow + PySpark still run locally in Docker; the public site uses a safe sample export.</p>
-          </figure>
+    <section id="dashboard">
+      <div class="wrap grid-2">
+        <div>
+          <p class="label">How to read the live dashboard</p>
+          <h2>Select something. See the result.</h2>
+          <p class="intro">
+            The public Streamlit app is the interactive UI. Use the sidebar, then read KPIs first,
+            then charts, map, and stops.
+          </p>
+          <div class="cta-row">
+            <a class="btn btn-dark" id="cta-live-2" href="#">Open live dashboard</a>
+            <a class="btn btn-line" id="cta-repo-2" href="#">Repository</a>
+          </div>
         </div>
+        <div class="howto">
+          <article>
+            <div>
+              <h3>Filters</h3>
+              <p>Date range, route, and vehicle type narrow every chart on the page.</p>
+            </div>
+          </article>
+          <article>
+            <div>
+              <h3>KPI cards</h3>
+              <p>Median delay, % on-time, trips observed, worst route — the quick health check.</p>
+            </div>
+          </article>
+          <article>
+            <div>
+              <h3>Routes &amp; heatmap</h3>
+              <p>Which lines are late, and whether certain hours / weekdays stand out.</p>
+            </div>
+          </article>
+          <article>
+            <div>
+              <h3>Map &amp; worst stops</h3>
+              <p>Where delays cluster geographically, plus a ranked stop table with observation counts.</p>
+            </div>
+          </article>
+        </div>
+      </div>
+    </section>
 
-        <div class="callout" id="streamlit-note">
-          <strong>Live dashboard link:</strong>
-          <span id="streamlit-status">
-            Not set yet. After you deploy on
-            <a href="https://share.streamlit.io" target="_blank" rel="noopener">Streamlit Community Cloud</a>,
-            paste the URL into <code>window.LIVE_DASHBOARD_URL</code> near the top of this file
-            (or tell the project owner to update it), then commit and push.
-          </span>
-        </div>
+    <section id="local">
+      <div class="wrap">
+        <p class="label">Run it yourself</p>
+        <h2>Clone → configure → Docker → dashboard</h2>
+        <p class="intro">
+          The public sites are for demos. The full Airflow + Spark + Postgres stack still runs
+          on your machine. Full steps are in the README.
+        </p>
+        <ol class="howto">
+          <article>
+            <div>
+              <h3>Copy <code>.env.example</code> → <code>.env</code></h3>
+              <p>Add Trafiklab keys. Keep <code>STATIC_FEED</code> and <code>REALTIME_FEED</code> in the same family.</p>
+            </div>
+          </article>
+          <article>
+            <div>
+              <h3>Bootstrap Docker</h3>
+              <p><code>.\scripts\bootstrap.ps1</code> — Airflow UI on :8081, Postgres on :5433.</p>
+            </div>
+          </article>
+          <article>
+            <div>
+              <h3>Trigger DAGs</h3>
+              <p>Ingest static + realtime, then <code>gtfs_transform</code> for a date with both feeds.</p>
+            </div>
+          </article>
+          <article>
+            <div>
+              <h3>Open local Streamlit</h3>
+              <p><code>py -m streamlit run dashboard/app.py</code> against live Postgres.</p>
+            </div>
+          </article>
+        </ol>
       </div>
     </section>
   </main>
 
   <footer>
     <div class="wrap">
-      <div>
-        Built as a portfolio data-engineering project · MIT License
-      </div>
-      <div>
-        <a id="footer-repo" href="#">Source on GitHub</a>
-      </div>
+      <div>Portfolio data-engineering project · MIT License · Built for SL / Trafiklab open data</div>
+      <div><a id="footer-repo" href="#">Source on GitHub</a></div>
     </div>
   </footer>
 
@@ -629,35 +812,119 @@
     (function () {
       var live = (window.LIVE_DASHBOARD_URL || "").trim();
       var repo = window.REPO_URL;
-      var liveButtons = [document.getElementById("cta-live"), document.getElementById("cta-live-2")];
-      var repoButtons = [
-        document.getElementById("cta-repo"),
-        document.getElementById("cta-repo-2"),
-        document.getElementById("footer-repo"),
-      ];
+      var base = window.DOCS_BASE;
 
-      repoButtons.forEach(function (el) {
-        if (el) el.href = repo;
-      });
-
-      liveButtons.forEach(function (el) {
+      function bind(id, href, blank) {
+        var el = document.getElementById(id);
         if (!el) return;
-        if (live) {
-          el.href = live;
+        el.href = href;
+        if (blank) {
           el.target = "_blank";
           el.rel = "noopener";
-        } else {
-          el.href = "#demo";
         }
+      }
+
+      ["cta-repo", "cta-repo-2", "footer-repo"].forEach(function (id) {
+        bind(id, repo, true);
+      });
+      ["cta-live", "cta-live-2"].forEach(function (id) {
+        bind(id, live || "#dashboard", !!live);
       });
 
-      if (live) {
-        var status = document.getElementById("streamlit-status");
-        if (status) {
-          status.innerHTML =
-            '<a href="' + live + '" target="_blank" rel="noopener">' + live + "</a>" +
-            " — open this for the interactive filters, KPIs, map, and stops.";
-        }
+      var docs = [
+        {
+          kind: "Plan",
+          title: "4-week project plan",
+          blurb: "Full roadmap, phase gates, DQ catalog, testing strategy.",
+          path: "/transit_delay_pipeline_4week_plan.md",
+        },
+        {
+          kind: "Goals",
+          title: "Project purpose & goals",
+          blurb: "Problem statement, success criteria, personas.",
+          path: "/docs/01-project-purpose-and-goals.md",
+        },
+        {
+          kind: "Architecture",
+          title: "System architecture",
+          blurb: "Components, ports, landing-zone contracts, DAG split.",
+          path: "/docs/02-architecture.md",
+        },
+        {
+          kind: "Checklist",
+          title: "Week 1 completion checklist",
+          blurb: "Foundation gate: Airflow ingest + raw landing zone.",
+          path: "/docs/WEEK1_CHECKLIST.md",
+        },
+        {
+          kind: "Checklist",
+          title: "Week 2 completion checklist",
+          blurb: "Transform gate: facts in Postgres + green DAG runs.",
+          path: "/docs/WEEK2_CHECKLIST.md",
+        },
+        {
+          kind: "Checklist",
+          title: "Week 3 completion checklist",
+          blurb: "Dashboard, DQ gate, tests — phase gate met.",
+          path: "/docs/WEEK3_CHECKLIST.md",
+        },
+        {
+          kind: "Runbook",
+          title: "Week 1 / 2 / 3 runbooks",
+          blurb: "Day-to-day commands for ingest, transform, dashboard, DQ.",
+          path: "/docs/week3-runbook.md",
+        },
+        {
+          kind: "ADR",
+          title: "Week 2 transform debugging (ADR-004)",
+          blurb: "Five stacked bugs from 0 rows to a green full DAG.",
+          path: "/docs/decisions/004-week2-transform-debugging.md",
+        },
+        {
+          kind: "ADR",
+          title: "Feed types & ID families (ADR-003)",
+          blurb: "Why static + realtime must share the same namespace.",
+          path: "/docs/decisions/003-ingest-feed-types.md",
+        },
+        {
+          kind: "Deploy",
+          title: "Public Streamlit deploy guide",
+          blurb: "Sample data + Community Cloud settings.",
+          path: "/docs/public-dashboard-deploy.md",
+        },
+        {
+          kind: "Deploy",
+          title: "GitHub Pages setup",
+          blurb: "How this landing site is published from /docs.",
+          path: "/docs/github-pages.md",
+        },
+        {
+          kind: "README",
+          title: "Repository README",
+          blurb: "Quick start, how to read the dashboard, public URLs.",
+          path: "/README.md",
+        },
+      ];
+
+      var grid = document.getElementById("doc-grid");
+      if (grid) {
+        grid.innerHTML = docs
+          .map(function (d) {
+            return (
+              '<a class="doc" href="' +
+              base +
+              d.path +
+              '" target="_blank" rel="noopener">' +
+              '<div class="kind">' +
+              d.kind +
+              "</div><h3>" +
+              d.title +
+              "</h3><p>" +
+              d.blurb +
+              "</p></a>"
+            );
+          })
+          .join("");
       }
     })();
   </script>
