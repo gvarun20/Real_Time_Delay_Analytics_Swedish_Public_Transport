@@ -290,8 +290,8 @@ Uses a **sample CSV** in the repo (no API keys, no home Postgres online).
 
 Full guide: [docs/public-dashboard-deploy.md](docs/public-dashboard-deploy.md)
 
-**Landing page:** _enable GitHub Pages, then add the URL here_  
-**Live dashboard:** _add your Streamlit app link here after deploy_
+**Landing page:** https://gvarun20.github.io/Real_Time_Delay_Analytics_Swedish_Public_Transport/  
+**Live dashboard:** https://realtime--delay--analytics--swedish--publictransport.streamlit.app/
 
 ---
 
