@@ -30,6 +30,10 @@ metastore_db/
 spark-warehouse/
 *.parquet
 
+# Allow the public demo sample dataset (exported for Streamlit Cloud)
+!dashboard/sample_data/
+!dashboard/sample_data/**
+
 # OS / IDE
 .DS_Store
 Thumbs.db

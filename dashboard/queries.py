@@ -1,13 +1,19 @@
-"""Parameterized SQL queries for the Streamlit dashboard.
+"""Dashboard query facade — Postgres locally, sample CSV on public Streamlit Cloud.
 
-All queries go through SQLAlchemy `text()` with bound parameters (never
-f-string interpolation of user-controlled values) to avoid SQL injection from
-sidebar filter selections.
+Public hosting cannot reach your home Docker Postgres. Mode selection:
+
+- ``DASHBOARD_DATA_SOURCE=sample`` → always use ``dashboard/sample_data/``
+- ``DASHBOARD_DATA_SOURCE=postgres`` → always use PostgreSQL
+- ``DASHBOARD_DATA_SOURCE=auto`` (default) → Postgres if reachable, else sample CSV
+
+All SQL for the Postgres path uses bound parameters (no string interpolation of
+user values).
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+import logging
+import os
 from datetime import date
 
 import pandas as pd
@@ -15,32 +21,63 @@ from sqlalchemy import bindparam, create_engine, text
 from sqlalchemy.engine import Engine
 
 from config.settings import postgres_url
-from jobs.transform.time_utils import date_to_date_key
+from dashboard import sample_data as sample
+from dashboard.filters import Filters
+
+logger = logging.getLogger(__name__)
 
 _engine: Engine | None = None
+_backend: str | None = None
 
 
 def get_engine() -> Engine:
     global _engine
     if _engine is None:
-        _engine = create_engine(postgres_url(), pool_pre_ping=True)
+        # Short timeout so Streamlit Cloud falls back to sample data quickly.
+        _engine = create_engine(
+            postgres_url(),
+            pool_pre_ping=True,
+            connect_args={"connect_timeout": 3},
+        )
     return _engine
 
 
-@dataclass
-class Filters:
-    start_date: date
-    end_date: date
-    route_ids: list[str] = field(default_factory=list)
-    vehicle_types: list[str] = field(default_factory=list)
+def _postgres_reachable() -> bool:
+    try:
+        with get_engine().connect() as conn:
+            conn.execute(text("SELECT 1"))
+        return True
+    except Exception as exc:  # noqa: BLE001 — any connect failure means use sample
+        logger.info("Postgres not reachable (%s); will use sample data if available", exc)
+        return False
 
-    @property
-    def start_date_key(self) -> int:
-        return date_to_date_key(self.start_date)
 
-    @property
-    def end_date_key(self) -> int:
-        return date_to_date_key(self.end_date)
+def active_backend() -> str:
+    """Return ``postgres`` or ``sample``."""
+    global _backend
+    if _backend is not None:
+        return _backend
+
+    forced = os.getenv("DASHBOARD_DATA_SOURCE", "auto").strip().lower()
+    if forced == "sample":
+        _backend = "sample"
+    elif forced == "postgres":
+        _backend = "postgres"
+    elif sample.sample_file_exists() and not _postgres_reachable():
+        _backend = "sample"
+    elif _postgres_reachable():
+        _backend = "postgres"
+    elif sample.sample_file_exists():
+        _backend = "sample"
+    else:
+        _backend = "postgres"  # will surface empty/error in UI
+
+    logger.info("Dashboard data backend: %s", _backend)
+    return _backend
+
+
+def using_sample_data() -> bool:
+    return active_backend() == "sample"
 
 
 def _where_clause(filters: Filters) -> tuple[str, dict]:
@@ -69,6 +106,8 @@ def _run(sql: str, params: dict) -> pd.DataFrame:
 
 
 def get_available_date_range() -> tuple[date | None, date | None]:
+    if using_sample_data():
+        return sample.get_available_date_range()
     df = _run(
         """
         SELECT MIN(d.full_date) AS min_date, MAX(d.full_date) AS max_date
@@ -83,6 +122,8 @@ def get_available_date_range() -> tuple[date | None, date | None]:
 
 
 def get_available_routes() -> pd.DataFrame:
+    if using_sample_data():
+        return sample.get_available_routes()
     return _run(
         """
         SELECT DISTINCT r.route_id, r.route_short_name
@@ -95,6 +136,8 @@ def get_available_routes() -> pd.DataFrame:
 
 
 def get_available_vehicle_types() -> pd.DataFrame:
+    if using_sample_data():
+        return sample.get_available_vehicle_types()
     return _run(
         """
         SELECT DISTINCT vt.type_name
@@ -107,6 +150,8 @@ def get_available_vehicle_types() -> pd.DataFrame:
 
 
 def get_kpis(filters: Filters) -> dict:
+    if using_sample_data():
+        return sample.get_kpis(filters)
     where, params = _where_clause(filters)
     sql = f"""
         SELECT
@@ -151,6 +196,8 @@ def get_kpis(filters: Filters) -> dict:
 
 
 def get_avg_delay_by_route(filters: Filters, limit: int = 20) -> pd.DataFrame:
+    if using_sample_data():
+        return sample.get_avg_delay_by_route(filters, limit=limit)
     where, params = _where_clause(filters)
     params["limit"] = limit
     sql = f"""
@@ -170,6 +217,8 @@ def get_avg_delay_by_route(filters: Filters, limit: int = 20) -> pd.DataFrame:
 
 
 def get_delay_heatmap(filters: Filters) -> pd.DataFrame:
+    if using_sample_data():
+        return sample.get_delay_heatmap(filters)
     where, params = _where_clause(filters)
     sql = f"""
         SELECT
@@ -189,6 +238,8 @@ def get_delay_heatmap(filters: Filters) -> pd.DataFrame:
 
 
 def get_worst_stops(filters: Filters, limit: int = 10) -> pd.DataFrame:
+    if using_sample_data():
+        return sample.get_worst_stops(filters, limit=limit)
     where, params = _where_clause(filters)
     params["limit"] = limit
     sql = f"""
@@ -211,6 +262,8 @@ def get_worst_stops(filters: Filters, limit: int = 10) -> pd.DataFrame:
 
 
 def get_stops_map_data(filters: Filters) -> pd.DataFrame:
+    if using_sample_data():
+        return sample.get_stops_map_data(filters)
     where, params = _where_clause(filters)
     sql = f"""
         SELECT
@@ -231,6 +284,8 @@ def get_stops_map_data(filters: Filters) -> pd.DataFrame:
 
 
 def get_delay_distribution(filters: Filters, sample_limit: int = 20000) -> pd.DataFrame:
+    if using_sample_data():
+        return sample.get_delay_distribution(filters, sample_limit=sample_limit)
     where, params = _where_clause(filters)
     params["limit"] = sample_limit
     sql = f"""

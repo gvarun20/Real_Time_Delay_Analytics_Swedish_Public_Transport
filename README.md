@@ -70,7 +70,7 @@ Full plan document: [`transit_delay_pipeline_4week_plan.md`](transit_delay_pipel
 | **1** | Complete | Airflow DAGs for static + realtime ingest; Docker Compose stack; landing zone under `data/raw/`; API key setup and runbooks |
 | **2** | Complete | Star schema in Postgres; PySpark transform; `gtfs_transform` DAG; real delay facts loaded (e.g. 2026-07-12 and 2026-07-13); hard debugging documented (feed ID mismatch, DB name, upsert bugs, etc.) |
 | **3** | Complete | Streamlit dashboard (KPIs, charts, map); data quality task after transform; 60+ pytest tests; CI with Postgres service |
-| **4** | Next | README polish (this file), demo video, portfolio write-up, optional Streamlit Cloud with sample data |
+| **4** | In progress | Public Streamlit Cloud deploy (sample data), CI badge, demo video, portfolio polish |
 
 Checklists:
 
@@ -256,8 +256,28 @@ py -m streamlit run dashboard/app.py
 
 Then open **http://localhost:8501** in your browser.
 
-> **Note:** This dashboard runs on your computer (local). It is not a public website yet.
-> Your Docker Postgres must be running so the charts can load data.
+> **Local:** needs Docker Postgres running.  
+> **Public website:** deploy on Streamlit Community Cloud with a sample CSV — see
+> [docs/public-dashboard-deploy.md](docs/public-dashboard-deploy.md).
+
+## Live public website (Streamlit Cloud)
+
+The interactive dashboard (filters → KPIs → charts → map → stops) can be hosted for free on
+**Streamlit Community Cloud**. It does **not** use your local Postgres online. Instead it uses a
+sample export file so no API keys are exposed.
+
+**You still need to:**
+
+1. Export sample data: `py scripts/export_dashboard_sample.py`
+2. Commit + push the file `dashboard/sample_data/delay_facts.csv.gz`
+3. Deploy at [share.streamlit.io](https://share.streamlit.io) with:
+   - Main file: `dashboard/app.py`
+   - Requirements: `dashboard/requirements.txt`
+
+Full click-by-click guide: [docs/public-dashboard-deploy.md](docs/public-dashboard-deploy.md)
+
+**Live demo URL:** _add your Streamlit app link here after deploy_  
+Example format: `https://your-app-name.streamlit.app`
 
 ---
 

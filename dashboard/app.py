@@ -1,10 +1,12 @@
 """Streamlit dashboard: Swedish transit delay analytics.
 
-Run with:
+Local:
     streamlit run dashboard/app.py
 
-Reads exclusively from the `fact_trip_delay` star schema in Postgres
-(read-only; no writes from this app).
+Public (Streamlit Community Cloud):
+    Main file = dashboard/app.py
+    Requirements file = dashboard/requirements.txt
+    Uses sample CSV when Postgres is not reachable (no secrets needed).
 """
 
 from __future__ import annotations
@@ -22,7 +24,7 @@ import plotly.express as px  # noqa: E402
 import streamlit as st  # noqa: E402
 
 from dashboard import queries  # noqa: E402
-from dashboard.queries import Filters  # noqa: E402
+from dashboard.filters import Filters  # noqa: E402
 
 st.set_page_config(
     page_title="Swedish Transit Delays",
@@ -95,14 +97,24 @@ def render_empty_state(message: str = "No data for the selected filters.") -> No
 
 
 def main() -> None:
-    st.title("🚋 Swedish Transit Delays")
-    st.caption("SL (Stockholm) · GTFS + GTFS-RT · Kimball star schema in PostgreSQL")
+    st.title("Swedish Transit Delays")
+    st.caption("SL (Stockholm) · GTFS + GTFS-RT · delay analytics")
+
+    if queries.using_sample_data():
+        st.info(
+            "Public demo mode: showing a **sample export** of delay facts "
+            "(same charts as the local Postgres dashboard). "
+            "The full Airflow + PySpark pipeline still runs in Docker on the developer machine."
+        )
+    else:
+        st.caption("Live mode: reading from local PostgreSQL star schema.")
 
     min_date, max_date = cached_date_range()
     if min_date is None:
         st.warning(
-            "No data found in `fact_trip_delay` yet. Run the `gtfs_transform` DAG "
-            "for at least one service date, then refresh this page."
+            "No data found. Locally: run the `gtfs_transform` DAG, then "
+            "`py scripts/export_dashboard_sample.py`. "
+            "For Streamlit Cloud: commit `dashboard/sample_data/delay_facts.csv.gz`."
         )
         return
 
