@@ -89,6 +89,9 @@ See [decisions/003-ingest-feed-types.md](decisions/003-ingest-feed-types.md) and
 
 ## Star schema
 
+**New to this idea?** Read the beginner guide first:  
+[03-star-schema-explained.md](03-star-schema-explained.md) — what facts/dimensions are, why Kimball, why we use it here.
+
 **Fact grain:** one row per `(trip_id, stop_key, date_key, stop_sequence)`
 
 | Table | Purpose |

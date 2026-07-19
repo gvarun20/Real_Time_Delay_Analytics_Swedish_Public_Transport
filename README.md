@@ -1,8 +1,13 @@
 # Real-Time Delay Analytics Pipeline for Swedish Public Transport
 
+[![CI](https://github.com/gvarun20/Real_Time_Delay_Analytics_Swedish_Public_Transport/actions/workflows/ci.yml/badge.svg)](https://github.com/gvarun20/Real_Time_Delay_Analytics_Swedish_Public_Transport/actions/workflows/ci.yml)
+
 A complete **data engineering** project that takes Swedish public transport data, cleans and joins it, stores it in a proper analytical database, and shows delay patterns in a simple dashboard.
 
 Everything runs **locally in Docker** at **$0 cost**. No paid cloud is required.
+
+**New to data engineering?** Start with the docs hub:  
+[`docs/00-START_HERE.md`](docs/00-START_HERE.md) → then [`docs/03-star-schema-explained.md`](docs/03-star-schema-explained.md) (why Kimball star schema).
 
 ---
 
@@ -145,6 +150,9 @@ dim_route ─┼─ fact_trip_delay ─┬─ dim_stop
            │                   │
    dim_vehicle_type ───────────┘
 ```
+
+**Why this model?** Easy filters for the dashboard, clear meaning for each row, standard for analytics interviews.  
+Full beginner explanation: [`docs/03-star-schema-explained.md`](docs/03-star-schema-explained.md)
 
 DDL: [`sql/schema.sql`](sql/schema.sql)
 
@@ -391,12 +399,25 @@ These are documented in [`docs/decisions/004-week2-transform-debugging.md`](docs
 
 | Document | What it explains |
 |---|---|
+| [docs/00-START_HERE.md](docs/00-START_HERE.md) | **Beginner reading order** (start here) |
+| [docs/03-star-schema-explained.md](docs/03-star-schema-explained.md) | Kimball star schema in plain English |
+| [docs/04-glossary.md](docs/04-glossary.md) | ETL, DAG, GTFS, CI, grain, … |
 | [docs/01-project-purpose-and-goals.md](docs/01-project-purpose-and-goals.md) | Purpose, goals, success criteria |
 | [docs/02-architecture.md](docs/02-architecture.md) | Components and data contracts |
 | [transit_delay_pipeline_4week_plan.md](transit_delay_pipeline_4week_plan.md) | Full 4-week plan |
 | [docs/WEEK1_CHECKLIST.md](docs/WEEK1_CHECKLIST.md) · [WEEK2](docs/WEEK2_CHECKLIST.md) · [WEEK3](docs/WEEK3_CHECKLIST.md) | Week completion gates |
 | [docs/week1-runbook.md](docs/week1-runbook.md) · [week2](docs/week2-runbook.md) · [week3](docs/week3-runbook.md) | How to operate each week |
 | [docs/decisions/](docs/decisions/) | Architecture Decision Records (ADRs) |
+
+### CI / CD (what runs automatically)
+
+| Automation | What it does | Where |
+|---|---|---|
+| **CI** (GitHub Actions) | On every push to `main`: install deps, `ruff` lint, load SQL schema into a Postgres service, run pytest | [Actions → CI](https://github.com/gvarun20/Real_Time_Delay_Analytics_Swedish_Public_Transport/actions/workflows/ci.yml) |
+| **CD for docs site** | GitHub Pages rebuilds the landing page from `/docs` | [Pages site](https://gvarun20.github.io/Real_Time_Delay_Analytics_Swedish_Public_Transport/) |
+| **CD for dashboard** | Streamlit Cloud redeploys when `main` changes (sample data app) | [Live dashboard](https://realtime--delay--analytics--swedish--publictransport.streamlit.app/) |
+
+Green CI badge at the top of this README = latest `main` lint + tests passed.
 
 ---
 

@@ -607,11 +607,19 @@
           <p class="label">Data model</p>
           <h2>Star schema at the center</h2>
           <p class="intro">
-            Dimensions answer who / what / where / when. The fact table stores the measurement:
-            scheduled vs actual arrival and delay in seconds.
+            <strong>Kimball star schema</strong> = put measurements in a <em>fact</em> table and
+            descriptive labels in <em>dimension</em> tables. Dimensions answer who / what / where / when.
+            The fact stores scheduled time, actual time, and <code>delay_seconds</code>.
+          </p>
+          <p class="intro">
+            <strong>Why we use it:</strong> dashboard filters stay simple, every row has a clear meaning
+            (“grain”), and this is the standard analytics model interviewers expect — much easier than
+            querying raw GTFS files every time.
           </p>
           <p class="intro" style="margin-bottom:0">
-            DDL lives in <code>sql/schema.sql</code>. Seeds and indexes ship with Docker Postgres init.
+            Full beginner guide on GitHub:
+            <a id="link-star" href="#" target="_blank" rel="noopener">03-star-schema-explained.md</a>.
+            DDL: <code>sql/schema.sql</code>.
           </p>
         </div>
         <div class="schema" aria-label="Star schema summary">
@@ -830,8 +838,27 @@
       ["cta-live", "cta-live-2"].forEach(function (id) {
         bind(id, live || "#dashboard", !!live);
       });
+      bind("link-star", base + "/docs/03-star-schema-explained.md", true);
 
       var docs = [
+        {
+          kind: "Start here",
+          title: "Documentation map (beginner order)",
+          blurb: "Read this first if you are new to data engineering.",
+          path: "/docs/00-START_HERE.md",
+        },
+        {
+          kind: "Star schema",
+          title: "Kimball star schema explained simply",
+          blurb: "Facts, dimensions, grain, and why we use this model.",
+          path: "/docs/03-star-schema-explained.md",
+        },
+        {
+          kind: "Glossary",
+          title: "Beginner glossary",
+          blurb: "ETL, DAG, GTFS, CI, upsert, delay signs, …",
+          path: "/docs/04-glossary.md",
+        },
         {
           kind: "Plan",
           title: "4-week project plan",

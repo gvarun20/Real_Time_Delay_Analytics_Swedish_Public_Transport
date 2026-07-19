@@ -17,7 +17,7 @@ This project directly demonstrates skills commonly expected for data engineering
 |---|---|
 | Workflow orchestration | Apache Airflow DAGs with retries, scheduling, failure callbacks |
 | Large-scale processing | PySpark transforms on real GTFS volumes |
-| Dimensional modeling | Kimball star schema (`dim_*` + `fact_trip_delay`) |
+| Dimensional modeling | Kimball star schema (`dim_*` + `fact_trip_delay`) — explained in [03-star-schema-explained.md](03-star-schema-explained.md) |
 | Data quality mindset | Validation gates before downstream consumers |
 | DevOps | Docker Compose, CI, reproducible local environment |
 | Storytelling | Clear docs, architecture diagrams, demo-ready artifacts |
