@@ -15,6 +15,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from dags.common import DEFAULT_ARGS  # noqa: E402
+from jobs.compute_route_energy_scores import run_compute  # noqa: E402
 from jobs.transform.paths import latest_realtime_pb  # noqa: E402
 from jobs.transform_gtfs import run_transform  # noqa: E402
 from jobs.validate_data_quality import validate  # noqa: E402
@@ -37,6 +38,13 @@ def validate_data_quality_task(**context) -> None:
     validate(context["ds"], dag_run_id=context.get("run_id"))
 
 
+def compute_energy_scores_task(**context) -> None:
+    """Relative energy score index for bus routes (not measured kWh)."""
+    service_date = context["ds"]
+    for region_id in ("all", "inner_stockholm", "south_stockholm"):
+        run_compute(service_date, region_id=region_id)
+
+
 with DAG(
     dag_id="gtfs_transform",
     default_args=DEFAULT_ARGS,
@@ -54,6 +62,8 @@ with DAG(
     and loads `fact_trip_delay` + dimensions in Postgres. Then runs the data
     quality check catalog (see `jobs/validate_data_quality.py`); ERROR-severity
     checks fail this task (and the DAG run), WARN-severity checks only log.
+    Then computes relative bus **energy scores** (unitless 0–100 index, not kWh)
+    into `fact_route_energy_score` for region presets.
 
     **Requires:** static + realtime data for the service date in `data/raw/`.
     """,
@@ -82,4 +92,14 @@ with DAG(
         python_callable=validate_data_quality_task,
     )
 
-    [wait_for_static, check_realtime] >> transform_with_pyspark >> validate_data_quality
+    compute_energy_scores = PythonOperator(
+        task_id="compute_route_energy_scores",
+        python_callable=compute_energy_scores_task,
+    )
+
+    (
+        [wait_for_static, check_realtime]
+        >> transform_with_pyspark
+        >> validate_data_quality
+        >> compute_energy_scores
+    )

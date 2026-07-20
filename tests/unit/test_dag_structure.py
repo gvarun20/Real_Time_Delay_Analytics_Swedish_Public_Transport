@@ -36,12 +36,18 @@ def test_common_module_has_failure_callback():
     assert "retries" in content
 
 
-def test_transform_dag_chains_validate_data_quality_after_transform():
+def test_transform_dag_chains_validate_then_energy_scores():
     content = (DAG_DIR / "dag_gtfs_transform.py").read_text(encoding="utf-8")
     assert 'task_id="validate_data_quality"' in content
-    assert "transform_with_pyspark >> validate_data_quality" in content
+    assert 'task_id="compute_route_energy_scores"' in content
+    # Chain order in the dependency block: transform → DQ → energy
+    dq_pos = content.index(">> validate_data_quality")
+    energy_pos = content.index(">> compute_energy_scores")
+    transform_pos = content.index(">> transform_with_pyspark")
+    assert transform_pos < dq_pos < energy_pos
 
 
 def test_transform_dag_imports_validate_module():
     content = (DAG_DIR / "dag_gtfs_transform.py").read_text(encoding="utf-8")
     assert "from jobs.validate_data_quality import validate" in content
+    assert "from jobs.compute_route_energy_scores import run_compute" in content

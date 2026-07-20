@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 from typing import Any
 
 import psycopg2
@@ -209,3 +210,92 @@ def update_dq_status(
                     (dq_status, service_date),
                 )
         conn.commit()
+
+
+def ensure_energy_score_table() -> None:
+    """Create fact_route_energy_score if missing (safe on existing Docker volumes)."""
+    ddl_path = Path(__file__).resolve().parents[2] / "sql" / "energy_score.sql"
+    ddl = ddl_path.read_text(encoding="utf-8")
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(ddl)
+        conn.commit()
+    logger.info("Ensured fact_route_energy_score exists")
+
+
+def delete_energy_scores_for_date(date_key: int, region_id: str) -> int:
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                DELETE FROM fact_route_energy_score
+                WHERE date_key = %s AND region_id = %s
+                """,
+                (date_key, region_id),
+            )
+            deleted = cur.rowcount
+        conn.commit()
+    logger.info(
+        "Deleted %d energy score rows for date_key=%s region=%s",
+        deleted,
+        date_key,
+        region_id,
+    )
+    return deleted
+
+
+def upsert_route_energy_scores(rows: list[dict[str, Any]]) -> int:
+    if not rows:
+        return 0
+
+    sql = """
+        INSERT INTO fact_route_energy_score (
+            date_key, route_key, vehicle_type_key, region_id, region_name,
+            trip_count, total_km, avg_km, total_hours, p90_hours, avg_stops,
+            delay_hours, raw_score, energy_score, is_flagged, flag_reasons, data_source
+        ) VALUES %s
+        ON CONFLICT (date_key, route_key, region_id) DO UPDATE SET
+            vehicle_type_key = EXCLUDED.vehicle_type_key,
+            region_name = EXCLUDED.region_name,
+            trip_count = EXCLUDED.trip_count,
+            total_km = EXCLUDED.total_km,
+            avg_km = EXCLUDED.avg_km,
+            total_hours = EXCLUDED.total_hours,
+            p90_hours = EXCLUDED.p90_hours,
+            avg_stops = EXCLUDED.avg_stops,
+            delay_hours = EXCLUDED.delay_hours,
+            raw_score = EXCLUDED.raw_score,
+            energy_score = EXCLUDED.energy_score,
+            is_flagged = EXCLUDED.is_flagged,
+            flag_reasons = EXCLUDED.flag_reasons,
+            data_source = EXCLUDED.data_source,
+            computed_at = NOW()
+    """
+    values = [
+        (
+            r["date_key"],
+            r["route_key"],
+            r["vehicle_type_key"],
+            r["region_id"],
+            r["region_name"],
+            r["trip_count"],
+            r["total_km"],
+            r["avg_km"],
+            r["total_hours"],
+            r["p90_hours"],
+            r["avg_stops"],
+            r["delay_hours"],
+            r["raw_score"],
+            r["energy_score"],
+            r["is_flagged"],
+            r["flag_reasons"],
+            r.get("data_source", "estimate_v1"),
+        )
+        for r in rows
+    ]
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            execute_values(cur, sql, values)
+        conn.commit()
+    logger.info("Upserted %d route energy score rows", len(values))
+    return len(values)

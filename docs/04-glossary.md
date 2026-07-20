@@ -14,7 +14,8 @@ Read this anytime a word feels unclear.
 | **GTFS-RT** | Live updates (delays, arrivals) | `tripupdates.pb` |
 | **Protobuf (.pb)** | Compact binary message format | realtime feed file |
 | **Kimball / star schema** | Analytics model: facts + dimensions | see `03-star-schema-explained.md` |
-| **Fact** | Measurable event row | `fact_trip_delay` |
+| **Fact** | Measurable event row | `fact_trip_delay`, `fact_route_energy_score` |
+| **Energy score** | Relative 0–100 index (not kWh) | distance + duration + stops + delay |
 | **Dimension** | Label / context table | `dim_route`, `dim_stop`, … |
 | **Grain** | What one fact row means | trip × stop × date × sequence |
 | **Surrogate key** | Integer ID created in the warehouse | `route_key`, `stop_key` |

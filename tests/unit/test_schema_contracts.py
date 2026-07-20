@@ -14,6 +14,7 @@ REQUIRED_TABLES = {
     "dim_vehicle_type",
     "fact_trip_delay",
     "pipeline_runs",
+    "fact_route_energy_score",
 }
 
 FACT_REQUIRED_COLUMNS = {
@@ -59,3 +60,19 @@ def test_pipeline_runs_has_dq_status_column():
     start = SCHEMA_SQL.index("CREATE TABLE IF NOT EXISTS pipeline_runs")
     end = SCHEMA_SQL.index(");", start)
     assert "dq_status" in SCHEMA_SQL[start:end]
+
+
+def test_fact_route_energy_score_has_score_and_flag_columns():
+    start = SCHEMA_SQL.index("CREATE TABLE IF NOT EXISTS fact_route_energy_score")
+    end = SCHEMA_SQL.index(");", start)
+    block = SCHEMA_SQL[start:end]
+    for column in (
+        "energy_score",
+        "raw_score",
+        "p90_hours",
+        "is_flagged",
+        "flag_reasons",
+        "region_id",
+    ):
+        assert column in block, f"fact_route_energy_score missing {column}"
+    assert "UNIQUE (date_key, route_key, region_id)" in SCHEMA_SQL

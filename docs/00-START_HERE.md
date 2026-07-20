@@ -27,6 +27,7 @@ Welcome. If you are new to data engineering, read in this order.
 | [week1-runbook.md](week1-runbook.md) | Download / ingest |
 | [week2-runbook.md](week2-runbook.md) | Transform into Postgres |
 | [week3-runbook.md](week3-runbook.md) | Dashboard + data quality |
+| [energy-score-runbook.md](energy-score-runbook.md) | Relative bus energy scores (0–100 index) |
 | [public-dashboard-deploy.md](public-dashboard-deploy.md) | Public Streamlit Cloud |
 | [github-pages.md](github-pages.md) | This project website |
 
