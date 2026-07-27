@@ -413,7 +413,7 @@ These are documented in [`docs/decisions/004-week2-transform-debugging.md`](docs
 
 | Automation | What it does | Where |
 |---|---|---|
-| **CI** (GitHub Actions) | On every push to `main`: install deps, `ruff` lint, load SQL schema into a Postgres service, run pytest | [Actions → CI](https://github.com/gvarun20/Real_Time_Delay_Analytics_Swedish_Public_Transport/actions/workflows/ci.yml) |
+| **CI** (GitHub Actions) | On every push/PR to `main` (and manual re-run): pip cache, `ruff`, load SQL schema + energy DDL into Postgres 15, pytest + coverage artifact | [Actions → CI](https://github.com/gvarun20/Real_Time_Delay_Analytics_Swedish_Public_Transport/actions/workflows/ci.yml) |
 | **CD for docs site** | GitHub Pages rebuilds the landing page from `/docs` | [Pages site](https://gvarun20.github.io/Real_Time_Delay_Analytics_Swedish_Public_Transport/) |
 | **CD for dashboard** | Streamlit Cloud redeploys when `main` changes (sample data app) | [Live dashboard](https://realtime--delay--analytics--swedish--publictransport.streamlit.app/) |
 

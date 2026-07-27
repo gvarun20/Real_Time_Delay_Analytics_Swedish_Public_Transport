@@ -1,14 +1,28 @@
 name: CI
 
+# Continuous Integration: lint + schema load + pytest on every push/PR to main.
+# CD for the landing page is GitHub Pages (Settings → Pages → /docs on main).
+# CD for the public dashboard is Streamlit Community Cloud (separate from this file).
+
 on:
   push:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_dispatch:  # allow manual re-run from the Actions tab
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
 
 jobs:
   lint-and-test:
+    name: Lint + test (Postgres 15)
     runs-on: ubuntu-latest
+    timeout-minutes: 20
 
     services:
       postgres:
@@ -20,37 +34,69 @@ jobs:
         ports:
           - 5432:5432
         options: >-
-          --health-cmd pg_isready
+          --health-cmd "pg_isready -U transit -d transit_dw"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements.txt
 
-      - name: Install dependencies
-        run: pip install -r requirements.txt
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
 
       - name: Ruff lint
         run: ruff check .
 
-      - name: Load star schema into Postgres service container
+      - name: Install psql client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+
+      - name: Load star schema into Postgres service
         env:
           PGPASSWORD: transit
+          PGHOST: localhost
+          PGPORT: 5432
+          PGUSER: transit
+          PGDATABASE: transit_dw
         run: |
-          psql -h localhost -p 5432 -U transit -d transit_dw -f sql/schema.sql
-          psql -h localhost -p 5432 -U transit -d transit_dw -f sql/seed_dim_date.sql
-          psql -h localhost -p 5432 -U transit -d transit_dw -f sql/indexes.sql
+          set -euo pipefail
+          psql -f sql/schema.sql
+          psql -f sql/seed_dim_date.sql
+          psql -f sql/indexes.sql
+          # Idempotent: keeps CI aligned with existing Docker volumes that use ensure_*
+          psql -f sql/energy_score.sql
 
-      - name: Pytest (unit + integration, against the Postgres service container)
+      - name: Pytest (unit + integration)
         env:
           POSTGRES_HOST: localhost
           POSTGRES_PORT: 5432
           POSTGRES_DB: transit_dw
           POSTGRES_USER: transit
           POSTGRES_PASSWORD: transit
-        run: pytest --cov=jobs --cov=config --cov=dashboard --cov-report=term-missing -q
+        run: |
+          pytest \
+            --cov=jobs \
+            --cov=config \
+            --cov=dashboard \
+            --cov-report=term-missing \
+            --cov-report=xml \
+            -q
+
+      - name: Upload coverage XML
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-xml
+          path: coverage.xml
+          if-no-files-found: ignore
+          retention-days: 14
