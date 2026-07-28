@@ -2,6 +2,9 @@
 
 Welcome. If you are new to data engineering, read in this order.
 
+**Also start from the repository README** — it has live links, why the project exists, how we built it week by week, and how to run it:  
+[../README.md](../README.md)
+
 ## 1) Understand the project (15 minutes)
 
 | # | Document | What you will learn |
