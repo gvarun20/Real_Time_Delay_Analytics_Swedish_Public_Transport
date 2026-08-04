@@ -156,6 +156,49 @@ def get_avg_delay_by_route(filters: Filters, limit: int = 20) -> pd.DataFrame:
     return out.reset_index(drop=True)
 
 
+def get_route_lateness(
+    filters: Filters,
+    *,
+    min_observations: int = 20,
+    limit: int = 25,
+) -> pd.DataFrame:
+    df = _apply_filters(load_facts(), filters).dropna(subset=["delay_seconds"])
+    empty_cols = [
+        "route_short_name",
+        "n_observations",
+        "avg_delay_sec",
+        "median_delay_sec",
+        "pct_late",
+        "pct_very_late",
+    ]
+    if df.empty:
+        return pd.DataFrame(columns=empty_cols)
+
+    rows = []
+    for name, g in df.groupby("route_short_name"):
+        delays = g["delay_seconds"]
+        if len(delays) < min_observations:
+            continue
+        rows.append(
+            {
+                "route_short_name": name,
+                "n_observations": int(len(delays)),
+                "avg_delay_sec": float(delays.mean()),
+                "median_delay_sec": float(delays.median()),
+                "pct_late": float((delays > 60).mean()),
+                "pct_very_late": float((delays > 300).mean()),
+            }
+        )
+    if not rows:
+        return pd.DataFrame(columns=empty_cols)
+    return (
+        pd.DataFrame(rows)
+        .sort_values(["pct_late", "avg_delay_sec"], ascending=False)
+        .head(limit)
+        .reset_index(drop=True)
+    )
+
+
 def get_delay_heatmap(filters: Filters) -> pd.DataFrame:
     df = _apply_filters(load_facts(), filters).dropna(subset=["delay_seconds"])
     if df.empty:

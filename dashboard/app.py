@@ -61,6 +61,12 @@ def cached_avg_delay_by_route(start_date, end_date, route_ids, vehicle_types):
 
 
 @st.cache_data(ttl=300)
+def cached_route_lateness(start_date, end_date, route_ids, vehicle_types, min_observations):
+    filters = Filters(start_date, end_date, list(route_ids), list(vehicle_types))
+    return queries.get_route_lateness(filters, min_observations=min_observations)
+
+
+@st.cache_data(ttl=300)
 def cached_heatmap(start_date, end_date, route_ids, vehicle_types):
     filters = Filters(start_date, end_date, list(route_ids), list(vehicle_types))
     return queries.get_delay_heatmap(filters)
@@ -277,43 +283,151 @@ These five cards summarize the filtered data. Read them **before** the charts.
 
     st.divider()
 
-    left, right = st.columns(2)
+    st.markdown("### 2) Which routes are late?")
+    st.markdown(
+        """
+**Question:** *Which lines should I look at first?*
 
-    with left:
-        st.markdown("### 2) Which routes are late?")
-        st.markdown(
-            """
-**What this chart shows:** the **20 routes** with the highest average delay.
+We rank routes by how often they are late — not only by average delay
+(averages can be skewed by a few extreme trips).
 
-**How to read it:**
-- Each **bar** is one route (line name on the left).
-- **Longer bar / redder colour** → more late on average (minutes).
-- **Shorter / greener** → closer to on time (or early).
-
-**Question it answers:** *“If I had to pick problem lines first, which ones?”*
+| Term | Meaning here |
+|---|---|
+| **% late** | Share of arrivals more than **1 minute** after the plan |
+| **% very late** | Share more than **5 minutes** late |
+| **Avg / median delay** | Typical lateness in minutes (median is more robust) |
+| **Samples** | How many arrivals we measured — ignore tiny samples |
 """
+    )
+    ctrl1, ctrl2 = st.columns(2)
+    with ctrl1:
+        sort_by = st.radio(
+            "Rank routes by",
+            options=["% late (recommended)", "Average delay (minutes)"],
+            horizontal=True,
+            help=(
+                "% late = how often is this line late? "
+                "Average = how late is it typically?"
+            ),
         )
-        route_df = cached_avg_delay_by_route(*filter_args)
-        if route_df.empty:
-            render_empty_state()
+    with ctrl2:
+        min_obs = st.slider(
+            "Minimum samples per route",
+            min_value=5,
+            max_value=100,
+            value=20,
+            step=5,
+            help="Hide routes with too little data so outliers cannot dominate.",
+        )
+
+    route_df = cached_route_lateness(*filter_args, min_obs)
+    if route_df.empty:
+        render_empty_state(
+            "No routes meet the minimum sample size. Lower the slider or widen filters."
+        )
+    else:
+        view = route_df.copy()
+        view["avg_delay_min"] = view["avg_delay_sec"] / 60.0
+        view["median_delay_min"] = view["median_delay_sec"] / 60.0
+        view["pct_late_display"] = (view["pct_late"] * 100).round(1)
+        view["pct_very_late_display"] = (view["pct_very_late"] * 100).round(1)
+
+        if sort_by.startswith("% late"):
+            view = view.sort_values(["pct_late", "avg_delay_min"], ascending=False)
+            bar_x = "pct_late_display"
+            bar_label = "% of arrivals late (>1 min)"
         else:
-            route_df["avg_delay_min"] = route_df["avg_delay_sec"] / 60
+            view = view.sort_values(["avg_delay_min", "pct_late"], ascending=False)
+            bar_x = "avg_delay_min"
+            bar_label = "Average delay (minutes)"
+
+        view = view.reset_index(drop=True)
+        top = view.head(3)
+        st.markdown("#### Top 3 problem routes (with enough data)")
+        cards = st.columns(3)
+        for i, (_, row) in enumerate(top.iterrows()):
+            with cards[i]:
+                st.metric(
+                    label=f"#{i + 1}  Route {row['route_short_name']}",
+                    value=f"{row['pct_late_display']:.0f}% late",
+                    delta=(
+                        f"avg {row['avg_delay_min']:+.1f} min · "
+                        f"{int(row['n_observations']):,} samples"
+                    ),
+                    delta_color="off",
+                )
+
+        chart_col, table_col = st.columns([1.1, 1])
+        with chart_col:
+            st.markdown("#### Chart — top 15")
+            st.caption(
+                "Longer bar = worse on the ranking you chose. "
+                "Hover for route name and value."
+            )
+            top15 = view.head(15).sort_values(bar_x)
             fig = px.bar(
-                route_df.sort_values("avg_delay_min"),
-                x="avg_delay_min",
+                top15,
+                x=bar_x,
                 y="route_short_name",
                 orientation="h",
-                labels={"avg_delay_min": "Average delay (minutes)", "route_short_name": "Route"},
-                color="avg_delay_min",
+                labels={bar_x: bar_label, "route_short_name": "Route"},
+                color=bar_x,
                 color_continuous_scale="RdYlGn_r",
+                hover_data={
+                    "pct_late_display": True,
+                    "avg_delay_min": ":.1f",
+                    "median_delay_min": ":.1f",
+                    "n_observations": True,
+                },
             )
-            fig.update_layout(height=500, coloraxis_showscale=False)
+            fig.update_layout(height=520, coloraxis_showscale=False)
             st.plotly_chart(fig, use_container_width=True)
 
-    with right:
-        st.markdown("### 3) When is delay worst?")
+        with table_col:
+            st.markdown("#### Table — same ranking")
+            st.caption("Use this when you want exact numbers, not just the picture.")
+            table = view.head(15)[
+                [
+                    "route_short_name",
+                    "pct_late_display",
+                    "pct_very_late_display",
+                    "avg_delay_min",
+                    "median_delay_min",
+                    "n_observations",
+                ]
+            ].copy()
+            table["avg_delay_min"] = table["avg_delay_min"].round(1)
+            table["median_delay_min"] = table["median_delay_min"].round(1)
+            st.dataframe(
+                table.rename(
+                    columns={
+                        "route_short_name": "Route",
+                        "pct_late_display": "% late (>1 min)",
+                        "pct_very_late_display": "% very late (>5 min)",
+                        "avg_delay_min": "Avg delay (min)",
+                        "median_delay_min": "Median delay (min)",
+                        "n_observations": "Samples",
+                    }
+                ),
+                use_container_width=True,
+                height=520,
+                hide_index=True,
+            )
+
         st.markdown(
             """
+**How to use this**
+- Prefer **% late** when asking “which lines fail often?”
+- Prefer **average delay** when asking “which lines are late by a lot when they miss?”
+- Always glance at **Samples** — a route with 8 samples is less trustworthy than one with 800.
+"""
+        )
+
+    st.divider()
+
+    st.markdown("### 3) When is delay worst?")
+    st.markdown(
+        """
 **What this chart shows:** average delay by **day of week** (rows) and **hour of day**
 (columns). Think of it as a calendar heat grid.
 
@@ -324,31 +438,31 @@ These five cards summarize the filtered data. Read them **before** the charts.
 
 **Question it answers:** *“Is morning rush worse than evenings? Are weekends different?”*
 """
+    )
+    heatmap_df = cached_heatmap(*filter_args)
+    if heatmap_df.empty:
+        render_empty_state()
+    else:
+        heatmap_df = heatmap_df.copy()
+        heatmap_df["avg_delay_min"] = heatmap_df["avg_delay_sec"] / 60
+        pivot = heatmap_df.pivot(
+            index="day_name", columns="hour_of_day", values="avg_delay_min"
         )
-        heatmap_df = cached_heatmap(*filter_args)
-        if heatmap_df.empty:
-            render_empty_state()
-        else:
-            heatmap_df = heatmap_df.copy()
-            heatmap_df["avg_delay_min"] = heatmap_df["avg_delay_sec"] / 60
-            pivot = heatmap_df.pivot(
-                index="day_name", columns="hour_of_day", values="avg_delay_min"
-            )
-            # dim_date.day_name is abbreviated (TO_CHAR(d, 'Dy') in sql/seed_dim_date.sql).
-            day_order = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
-            pivot = pivot.reindex([d for d in day_order if d in pivot.index])
-            fig = px.imshow(
-                pivot,
-                labels={
-                    "x": "Hour of day (0–23)",
-                    "y": "Day of week",
-                    "color": "Avg delay (min)",
-                },
-                color_continuous_scale="RdYlGn_r",
-                aspect="auto",
-            )
-            fig.update_layout(height=500)
-            st.plotly_chart(fig, use_container_width=True)
+        # dim_date.day_name is abbreviated (TO_CHAR(d, 'Dy') in sql/seed_dim_date.sql).
+        day_order = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+        pivot = pivot.reindex([d for d in day_order if d in pivot.index])
+        fig = px.imshow(
+            pivot,
+            labels={
+                "x": "Hour of day (0–23)",
+                "y": "Day of week",
+                "color": "Avg delay (min)",
+            },
+            color_continuous_scale="RdYlGn_r",
+            aspect="auto",
+        )
+        fig.update_layout(height=420)
+        st.plotly_chart(fig, use_container_width=True)
 
     st.divider()
 

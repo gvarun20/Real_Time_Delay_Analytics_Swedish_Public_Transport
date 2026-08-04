@@ -220,6 +220,41 @@ def get_avg_delay_by_route(filters: Filters, limit: int = 20) -> pd.DataFrame:
     return _run(sql, params)
 
 
+def get_route_lateness(
+    filters: Filters,
+    *,
+    min_observations: int = 20,
+    limit: int = 25,
+) -> pd.DataFrame:
+    """Per-route lateness ranking: % late, avg/median delay, sample size."""
+    if using_sample_data():
+        return sample.get_route_lateness(
+            filters, min_observations=min_observations, limit=limit
+        )
+    where, params = _where_clause(filters)
+    params["min_observations"] = min_observations
+    params["limit"] = limit
+    sql = f"""
+        SELECT
+            r.route_short_name,
+            COUNT(*) AS n_observations,
+            AVG(f.delay_seconds) AS avg_delay_sec,
+            PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY f.delay_seconds)
+                AS median_delay_sec,
+            AVG(CASE WHEN f.delay_seconds > 60 THEN 1.0 ELSE 0.0 END) AS pct_late,
+            AVG(CASE WHEN f.delay_seconds > 300 THEN 1.0 ELSE 0.0 END) AS pct_very_late
+        FROM fact_trip_delay f
+        JOIN dim_route r ON f.route_key = r.route_key
+        JOIN dim_vehicle_type vt ON f.vehicle_type_key = vt.vehicle_type_key
+        WHERE {where} AND f.delay_seconds IS NOT NULL
+        GROUP BY r.route_short_name
+        HAVING COUNT(*) >= :min_observations
+        ORDER BY pct_late DESC, avg_delay_sec DESC
+        LIMIT :limit
+    """
+    return _run(sql, params)
+
+
 def get_delay_heatmap(filters: Filters) -> pd.DataFrame:
     if using_sample_data():
         return sample.get_delay_heatmap(filters)
