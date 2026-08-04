@@ -157,6 +157,19 @@ def _punctuality_story(stats: dict) -> str:
     )
 
 
+def _robust_color_range(values: pd.Series, pad: float = 0.5) -> tuple[float, float]:
+    """Colour limits that ignore extreme outliers (p5..p95), in minutes."""
+    clean = values.dropna()
+    if clean.empty:
+        return -5.0, 15.0
+    lo = float(clean.quantile(0.05))
+    hi = float(clean.quantile(0.95))
+    if hi - lo < 1.0:
+        mid = float(clean.median())
+        lo, hi = mid - 5.0, mid + 5.0
+    return lo - pad, hi + pad
+
+
 def main() -> None:
     st.title("Swedish Transit Delays")
     st.caption("SL (Stockholm) · GTFS + GTFS-RT · delay analytics")
@@ -425,18 +438,19 @@ We rank routes by how often they are late — not only by average delay
 
     st.divider()
 
-    st.markdown("### 3) When is delay worst?")
+    st.markdown("### 3) When is delay worst? (by day + hour)")
     st.markdown(
         """
-**What this chart shows:** average delay by **day of week** (rows) and **hour of day**
-(columns). Think of it as a calendar heat grid.
+**Simple idea:** each cell is one **weekday + hour** combo.
+Colour = average delay in **minutes** for that slot.
 
-**How to read it:**
-- **Warmer / redder cell** → that hour on that weekday was more late on average.
-- **Cooler / greener cell** → better punctuality.
-- Empty or pale areas often mean little/no data for that slot.
+| Colour | Meaning |
+|---|---|
+| Greener | Closer to on time / early |
+| Redder | More late on average |
 
-**Question it answers:** *“Is morning rush worse than evenings? Are weekends different?”*
+**Tip:** if you only see one weekday, widen the **Date range** in the sidebar —
+the grid can only show days that have data.
 """
     )
     heatmap_df = cached_heatmap(*filter_args)
@@ -445,24 +459,53 @@ We rank routes by how often they are late — not only by average delay
     else:
         heatmap_df = heatmap_df.copy()
         heatmap_df["avg_delay_min"] = heatmap_df["avg_delay_sec"] / 60
+        days_present = sorted(heatmap_df["day_name"].dropna().unique().tolist())
+        st.caption(
+            f"Days with data in this filter: **{', '.join(days_present)}** "
+            f"({len(heatmap_df)} hour-slots). "
+            "Colour scale ignores extreme outliers so normal hours stay readable."
+        )
         pivot = heatmap_df.pivot(
             index="day_name", columns="hour_of_day", values="avg_delay_min"
         )
         # dim_date.day_name is abbreviated (TO_CHAR(d, 'Dy') in sql/seed_dim_date.sql).
         day_order = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
         pivot = pivot.reindex([d for d in day_order if d in pivot.index])
+        zmin, zmax = _robust_color_range(heatmap_df["avg_delay_min"])
         fig = px.imshow(
             pivot,
             labels={
-                "x": "Hour of day (0–23)",
+                "x": "Hour of day (0-23)",
                 "y": "Day of week",
                 "color": "Avg delay (min)",
             },
             color_continuous_scale="RdYlGn_r",
             aspect="auto",
+            zmin=zmin,
+            zmax=zmax,
         )
         fig.update_layout(height=420)
         st.plotly_chart(fig, use_container_width=True)
+
+        # Easy companion: busiest late hours as a small table
+        late_hours = (
+            heatmap_df.sort_values("avg_delay_min", ascending=False)
+            .head(8)[["day_name", "hour_of_day", "avg_delay_min"]]
+            .copy()
+        )
+        late_hours["avg_delay_min"] = late_hours["avg_delay_min"].round(1)
+        st.markdown("**Worst time slots in this filter** (same data as the grid):")
+        st.dataframe(
+            late_hours.rename(
+                columns={
+                    "day_name": "Day",
+                    "hour_of_day": "Hour",
+                    "avg_delay_min": "Avg delay (min)",
+                }
+            ),
+            use_container_width=True,
+            hide_index=True,
+        )
 
     st.divider()
 
@@ -472,24 +515,35 @@ We rank routes by how often they are late — not only by average delay
         st.markdown("### 4) Where on the map are stops late?")
         st.markdown(
             """
-**What this map shows:** each **dot is a stop**. Colour = average delay at that stop.
-Size = how many observations we have (bigger = more evidence).
+**Simple idea:** each **dot = one stop**.
 
-**How to read it:**
-- **Redder dots** → stops that tend to be later.
-- **Greener dots** → better punctuality.
-- Hover a dot to see the stop name and delay in minutes.
+| Signal | Meaning |
+|---|---|
+| **Colour** | Average delay (minutes). Redder = later |
+| **Size** | How many samples. Bigger = more trustworthy |
+| **Hover** | Stop name + exact delay |
 
-**Question it answers:** *“Do problems cluster in one area of the city?”*
+Colour is scaled with a **robust range** (ignores a few crazy outliers), so the map
+stays readable. Extreme stops still appear in the Top 10 list on the right.
 """
         )
         map_df = cached_map_data(*filter_args)
         if map_df.empty:
             render_empty_state("No stop coordinates for the selected filters.")
         else:
+            map_df = map_df.copy()
             map_df["avg_delay_min"] = map_df["avg_delay_sec"] / 60
+            # Prefer stops with a little evidence on the map
+            map_plot = map_df[map_df["n_observations"] >= 3].copy()
+            if map_plot.empty:
+                map_plot = map_df
+            cmin, cmax = _robust_color_range(map_plot["avg_delay_min"])
+            st.caption(
+                f"Showing **{len(map_plot):,}** stops "
+                f"(colour roughly {cmin:.0f} to {cmax:.0f} min for readability)."
+            )
             fig = px.scatter_map(
-                map_df,
+                map_plot,
                 lat="stop_lat",
                 lon="stop_lon",
                 color="avg_delay_min",
@@ -497,6 +551,7 @@ Size = how many observations we have (bigger = more evidence).
                 hover_name="stop_name",
                 hover_data={"avg_delay_min": ":.1f", "n_observations": True},
                 color_continuous_scale="RdYlGn_r",
+                range_color=(cmin, cmax),
                 map_style="open-street-map",
                 zoom=9,
                 height=500,
@@ -509,14 +564,12 @@ Size = how many observations we have (bigger = more evidence).
         st.markdown("### 5) Top 10 worst stops (list)")
         st.markdown(
             """
-**What this table shows:** the same idea as the map, but as a **ranked list**.
+**Same story as the map**, as a ranked list.
 
-**How to read it:**
-- **Avg delay (min)** — higher = worse punctuality at that stop.
-- **Observations** — how many times we measured it. Prefer stops with more observations;
-  a stop with only a few samples can look extreme by chance.
+- **Avg delay (min)** — higher = worse
+- **Observations** — prefer larger numbers (more evidence)
 
-Use the **map** to see *where*, and this **table** to see *who ranks worst*.
+A stop with huge delay but only 3 observations can be noise — check the sample count.
 """
         )
         stops_df = cached_worst_stops(*filter_args)
