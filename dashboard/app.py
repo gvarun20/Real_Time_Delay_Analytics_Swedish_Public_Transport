@@ -101,6 +101,56 @@ def render_empty_state(message: str = "No data for the selected filters.") -> No
     st.info(f"ℹ️ {message} Try widening the date range or clearing filters.")
 
 
+def _punctuality_summary(delay_min: pd.Series) -> dict:
+    """Build simple punctuality stats from delay minutes (non-null)."""
+    n = int(len(delay_min))
+    if n == 0:
+        return {"n": 0}
+
+    early = delay_min < -1
+    on_time = delay_min.between(-1, 1, inclusive="both")
+    late = delay_min > 1
+
+    def pct(mask: pd.Series) -> float:
+        return 100.0 * float(mask.sum()) / n
+
+    return {
+        "n": n,
+        "early_pct": pct(early),
+        "on_time_pct": pct(on_time),
+        "late_pct": pct(late),
+        "within_1_pct": pct(delay_min.abs() <= 1),
+        "within_3_pct": pct(delay_min.abs() <= 3),
+        "within_5_pct": pct(delay_min.abs() <= 5),
+        "within_10_pct": pct(delay_min.abs() <= 10),
+        "median_min": float(delay_min.median()),
+        "p90_min": float(delay_min.quantile(0.90)),
+    }
+
+
+def _punctuality_story(stats: dict) -> str:
+    """One short paragraph a non-expert can understand."""
+    if not stats.get("n"):
+        return "No delay measurements available for these filters."
+
+    dominant = max(
+        ("early", stats["early_pct"]),
+        ("about on time", stats["on_time_pct"]),
+        ("late", stats["late_pct"]),
+        key=lambda x: x[1],
+    )[0]
+
+    return (
+        f"Out of **{stats['n']:,}** stop arrivals with a live update, "
+        f"**{stats['on_time_pct']:.0f}%** were about on time (+/-1 min), "
+        f"**{stats['early_pct']:.0f}%** were early, and "
+        f"**{stats['late_pct']:.0f}%** were late. "
+        f"Most arrivals in this filter fall in the **{dominant}** group. "
+        f"Half of arrivals were within about **{stats['median_min']:+.1f} min** of the plan "
+        f"(median), and 9 out of 10 were at or below **{stats['p90_min']:+.1f} min** (p90)."
+    )
+
+
 def main() -> None:
     st.title("Swedish Transit Delays")
     st.caption("SL (Stockholm) · GTFS + GTFS-RT · delay analytics")
@@ -124,12 +174,16 @@ def main() -> None:
         return
 
     st.sidebar.header("Filters")
+    st.sidebar.caption(
+        "These filters apply to **both** tabs. Leave Route / Vehicle type empty to see everything."
+    )
     default_start = max(min_date, max_date - timedelta(days=6))
     date_range = st.sidebar.date_input(
         "Date range",
         value=(default_start, max_date),
         min_value=min_date,
         max_value=max_date,
+        help="Only days that already have data in the warehouse.",
     )
     # While the user has only picked one endpoint, Streamlit returns a
     # 1-tuple instead of a pair — fall back to the defaults until both are set.
@@ -140,13 +194,19 @@ def main() -> None:
 
     routes_df = cached_routes()
     route_options = dict(zip(routes_df["route_short_name"], routes_df["route_id"], strict=False))
-    selected_route_names = st.sidebar.multiselect("Route", options=list(route_options.keys()))
+    selected_route_names = st.sidebar.multiselect(
+        "Route",
+        options=list(route_options.keys()),
+        help="Pick one or more line names. Empty = all routes.",
+    )
     selected_route_ids = tuple(route_options[name] for name in selected_route_names)
 
     vehicle_types_df = cached_vehicle_types()
     selected_vehicle_types = tuple(
         st.sidebar.multiselect(
-            "Vehicle type", options=vehicle_types_df["type_name"].tolist()
+            "Vehicle type",
+            options=vehicle_types_df["type_name"].tolist(),
+            help="Bus, Metro, Rail, etc. Empty = all types.",
         )
     )
 
@@ -162,16 +222,43 @@ def main() -> None:
 
 
 def render_delay_tab(filter_args: tuple) -> None:
+    st.subheader("How late are the buses and trains?")
+    st.markdown(
+        """
+This tab answers one simple question: **are vehicles on time, early, or late?**
+
+We compare the **planned** arrival time (from the schedule) with the **actual** arrival
+time (from live updates). The difference is the delay:
+
+| Delay | Meaning |
+|---|---|
+| **Positive** (e.g. +5 min) | Late |
+| **Zero** | On time |
+| **Negative** (e.g. −2 min) | Early |
+| **Missing** | No live update matched that stop (unknown) |
+
+Use the **sidebar filters** (date, route, vehicle type) to focus. Empty filters = show all.
+"""
+    )
+
     kpis = cached_kpis(*filter_args)
     if kpis["total_facts"] == 0:
         render_empty_state()
         return
 
-    st.subheader("Key metrics")
-    st.caption(
-        "Quick health check for the selected filters. "
-        "**Realtime match %** = share of stop rows that got a live GTFS-RT update "
-        "(the rest have unknown delay)."
+    st.markdown("### 1) Numbers at a glance")
+    st.markdown(
+        """
+These five cards summarize the filtered data. Read them **before** the charts.
+
+| Card | What it tells you |
+|---|---|
+| **Median delay** | Middle delay (half better, half worse). More stable than average. |
+| **% on-time** | Share on time or early (delay ≤ 0). Higher is better. |
+| **Trips observed** | Distinct trips seen. Low count → less trustworthy charts. |
+| **Realtime match %** | Share with a live update. Low % → many unknown delays. |
+| **Worst route** | Highest average delay in your filter — start investigating here. |
+"""
     )
     col1, col2, col3, col4, col5 = st.columns(5)
     col1.metric("Median delay", fmt_minutes(kpis["median_delay_sec"]))
@@ -193,7 +280,19 @@ def render_delay_tab(filter_args: tuple) -> None:
     left, right = st.columns(2)
 
     with left:
-        st.subheader("Average delay by route (top 20)")
+        st.markdown("### 2) Which routes are late?")
+        st.markdown(
+            """
+**What this chart shows:** the **20 routes** with the highest average delay.
+
+**How to read it:**
+- Each **bar** is one route (line name on the left).
+- **Longer bar / redder colour** → more late on average (minutes).
+- **Shorter / greener** → closer to on time (or early).
+
+**Question it answers:** *“If I had to pick problem lines first, which ones?”*
+"""
+        )
         route_df = cached_avg_delay_by_route(*filter_args)
         if route_df.empty:
             render_empty_state()
@@ -204,7 +303,7 @@ def render_delay_tab(filter_args: tuple) -> None:
                 x="avg_delay_min",
                 y="route_short_name",
                 orientation="h",
-                labels={"avg_delay_min": "Avg delay (min)", "route_short_name": "Route"},
+                labels={"avg_delay_min": "Average delay (minutes)", "route_short_name": "Route"},
                 color="avg_delay_min",
                 color_continuous_scale="RdYlGn_r",
             )
@@ -212,20 +311,39 @@ def render_delay_tab(filter_args: tuple) -> None:
             st.plotly_chart(fig, use_container_width=True)
 
     with right:
-        st.subheader("Delay heatmap — hour of day × day of week")
+        st.markdown("### 3) When is delay worst?")
+        st.markdown(
+            """
+**What this chart shows:** average delay by **day of week** (rows) and **hour of day**
+(columns). Think of it as a calendar heat grid.
+
+**How to read it:**
+- **Warmer / redder cell** → that hour on that weekday was more late on average.
+- **Cooler / greener cell** → better punctuality.
+- Empty or pale areas often mean little/no data for that slot.
+
+**Question it answers:** *“Is morning rush worse than evenings? Are weekends different?”*
+"""
+        )
         heatmap_df = cached_heatmap(*filter_args)
         if heatmap_df.empty:
             render_empty_state()
         else:
+            heatmap_df = heatmap_df.copy()
+            heatmap_df["avg_delay_min"] = heatmap_df["avg_delay_sec"] / 60
             pivot = heatmap_df.pivot(
-                index="day_name", columns="hour_of_day", values="avg_delay_sec"
+                index="day_name", columns="hour_of_day", values="avg_delay_min"
             )
             # dim_date.day_name is abbreviated (TO_CHAR(d, 'Dy') in sql/seed_dim_date.sql).
             day_order = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
             pivot = pivot.reindex([d for d in day_order if d in pivot.index])
             fig = px.imshow(
                 pivot,
-                labels={"x": "Hour of day", "y": "Day", "color": "Avg delay (s)"},
+                labels={
+                    "x": "Hour of day (0–23)",
+                    "y": "Day of week",
+                    "color": "Avg delay (min)",
+                },
                 color_continuous_scale="RdYlGn_r",
                 aspect="auto",
             )
@@ -237,7 +355,20 @@ def render_delay_tab(filter_args: tuple) -> None:
     left2, right2 = st.columns(2)
 
     with left2:
-        st.subheader("Stops colored by average delay")
+        st.markdown("### 4) Where on the map are stops late?")
+        st.markdown(
+            """
+**What this map shows:** each **dot is a stop**. Colour = average delay at that stop.
+Size = how many observations we have (bigger = more evidence).
+
+**How to read it:**
+- **Redder dots** → stops that tend to be later.
+- **Greener dots** → better punctuality.
+- Hover a dot to see the stop name and delay in minutes.
+
+**Question it answers:** *“Do problems cluster in one area of the city?”*
+"""
+        )
         map_df = cached_map_data(*filter_args)
         if map_df.empty:
             render_empty_state("No stop coordinates for the selected filters.")
@@ -255,12 +386,25 @@ def render_delay_tab(filter_args: tuple) -> None:
                 map_style="open-street-map",
                 zoom=9,
                 height=500,
+                labels={"avg_delay_min": "Avg delay (min)"},
             )
             fig.update_layout(margin={"r": 0, "t": 0, "l": 0, "b": 0})
             st.plotly_chart(fig, use_container_width=True)
 
     with right2:
-        st.subheader("Top 10 worst stops (avg delay)")
+        st.markdown("### 5) Top 10 worst stops (list)")
+        st.markdown(
+            """
+**What this table shows:** the same idea as the map, but as a **ranked list**.
+
+**How to read it:**
+- **Avg delay (min)** — higher = worse punctuality at that stop.
+- **Observations** — how many times we measured it. Prefer stops with more observations;
+  a stop with only a few samples can look extreme by chance.
+
+Use the **map** to see *where*, and this **table** to see *who ranks worst*.
+"""
+        )
         stops_df = cached_worst_stops(*filter_args)
         if stops_df.empty:
             render_empty_state()
@@ -269,28 +413,142 @@ def render_delay_tab(filter_args: tuple) -> None:
             st.dataframe(
                 stops_df[["stop_name", "avg_delay_min", "n_observations"]].rename(
                     columns={
-                        "stop_name": "Stop",
+                        "stop_name": "Stop name",
                         "avg_delay_min": "Avg delay (min)",
                         "n_observations": "Observations",
                     }
                 ),
                 use_container_width=True,
-                height=460,
+                height=420,
                 hide_index=True,
             )
 
     st.divider()
 
-    st.subheader("Delay distribution")
+    st.markdown("### 6) Punctuality — easy view")
+    st.markdown(
+        """
+**Forget “distribution”.** This section answers only:
+
+> *Of all arrivals that got a live update, how punctual were they?*
+
+We do **not** plot every weird outlier on a stretched axis. Instead we show:
+1. a **short written summary**,
+2. three big groups (**early / on time / late**),
+3. a **punctuality ladder** — what % stayed within 1, 3, 5, or 10 minutes of the plan.
+"""
+    )
     dist_df = cached_delay_distribution(*filter_args)
     if dist_df.empty:
         render_empty_state()
     else:
-        dist_df["delay_min"] = dist_df["delay_seconds"] / 60
-        fig = px.histogram(dist_df, x="delay_min", nbins=60, labels={"delay_min": "Delay (min)"})
-        fig.add_vline(x=0, line_dash="dash", line_color="gray")
-        fig.update_layout(height=350)
-        st.plotly_chart(fig, use_container_width=True)
+        delay_min = dist_df["delay_seconds"] / 60.0
+        stats = _punctuality_summary(delay_min)
+
+        st.info(_punctuality_story(stats))
+
+        st.markdown("#### Step A — Three groups only")
+        st.caption(
+            "Early = more than 1 minute early · On time = within ±1 minute · "
+            "Late = more than 1 minute late."
+        )
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Early", f"{stats['early_pct']:.0f}%")
+        c2.metric("About on time", f"{stats['on_time_pct']:.0f}%")
+        c3.metric("Late", f"{stats['late_pct']:.0f}%")
+
+        pie_df = pd.DataFrame(
+            {
+                "group": ["Early", "About on time", "Late"],
+                "percent": [stats["early_pct"], stats["on_time_pct"], stats["late_pct"]],
+            }
+        )
+        fig_pie = px.pie(
+            pie_df,
+            names="group",
+            values="percent",
+            color="group",
+            color_discrete_map={
+                "Early": "#3498db",
+                "About on time": "#27ae60",
+                "Late": "#e74c3c",
+            },
+            hole=0.45,
+        )
+        fig_pie.update_traces(textposition="inside", textinfo="percent+label")
+        fig_pie.update_layout(height=320, showlegend=False, margin=dict(t=20, b=20, l=20, r=20))
+        st.plotly_chart(fig_pie, use_container_width=True)
+
+        st.markdown("#### Step B — Punctuality ladder (most useful view)")
+        st.markdown(
+            """
+Ask: **“What share of arrivals stayed close enough to the timetable?”**
+
+Each bar is independent (not stacked). Higher % on the tighter rows = better service.
+Example: **within 5 minutes = 90%** means 9 of 10 arrivals were at most 5 minutes
+early or late.
+"""
+        )
+        ladder = pd.DataFrame(
+            {
+                "rule": [
+                    "Within ±1 minute",
+                    "Within ±3 minutes",
+                    "Within ±5 minutes",
+                    "Within ±10 minutes",
+                ],
+                "percent": [
+                    stats["within_1_pct"],
+                    stats["within_3_pct"],
+                    stats["within_5_pct"],
+                    stats["within_10_pct"],
+                ],
+            }
+        )
+        fig_ladder = px.bar(
+            ladder,
+            x="percent",
+            y="rule",
+            orientation="h",
+            text="percent",
+            labels={"percent": "Share of arrivals (%)", "rule": ""},
+            color="percent",
+            color_continuous_scale="Greens",
+            range_x=[0, 100],
+        )
+        fig_ladder.update_traces(texttemplate="%{text:.0f}%", textposition="outside")
+        fig_ladder.update_layout(
+            height=280,
+            coloraxis_showscale=False,
+            margin=dict(l=10, r=40, t=10, b=10),
+        )
+        st.plotly_chart(fig_ladder, use_container_width=True)
+
+        st.markdown(
+            f"""
+**How to judge this quickly**
+
+| If you see… | It usually means… |
+|---|---|
+| High **About on time** + high **within ±5 min** | Service is mostly reliable |
+| High **Late** but still high **within ±10 min** | Small delays are common; huge delays are rare |
+| Low **within ±10 min** | Many arrivals are far from the plan — dig into routes/stops above |
+| Median around **{stats['median_min']:+.1f} min** | Typical arrival in this filter |
+
+This replaces the old “delay distribution” histogram, which was hard to read when a few
+extreme values stretched the scale.
+"""
+        )
+
+    with st.expander("If something looks empty or weird", expanded=False):
+        st.markdown(
+            """
+- **No data** → widen the date range or clear route filters.
+- **Very high delays** → can be real congestion, or a bad join / sparse realtime match.
+  Check **Realtime match %** above.
+- **Public demo** uses a sample CSV export; local mode reads your Postgres warehouse.
+"""
+        )
 
 
 def render_energy_tab(start_date, end_date) -> None:

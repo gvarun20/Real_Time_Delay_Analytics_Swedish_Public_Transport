@@ -220,7 +220,7 @@ Two tabs after the pipeline has data:
 | **Avg delay by route** | Which lines are late on average? |
 | **Heatmap** | Is rush hour / weekend worse? |
 | **Map + worst stops** | *Where* do problems cluster? |
-| **Histogram** | Many small delays or a few huge outliers? |
+| **Punctuality view** | % early / on time / late + % within 1–10 minutes |
 
 **Sign convention:** `delay_seconds > 0` late · `= 0` on time · `< 0` early · `NULL` = no realtime match.
 
