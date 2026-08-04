@@ -7,6 +7,7 @@ from datetime import date
 import pandas as pd
 from sqlalchemy import text
 
+from dashboard import sample_data as sample
 from dashboard.queries import get_engine, using_sample_data
 from jobs.energy.scoring import REGION_PRESETS
 from jobs.transform.time_utils import date_to_date_key
@@ -23,10 +24,10 @@ def get_energy_scores(
 ) -> pd.DataFrame:
     """Return route energy scores for the date range + region.
 
-    Empty when using sample/public mode without energy CSV (local Postgres only for v1).
+    Uses sample CSV on Streamlit Cloud when Postgres is unreachable.
     """
     if using_sample_data():
-        return pd.DataFrame()
+        return sample.get_energy_scores(start_date, end_date, region_id)
 
     start_key = date_to_date_key(start_date)
     end_key = date_to_date_key(end_date)

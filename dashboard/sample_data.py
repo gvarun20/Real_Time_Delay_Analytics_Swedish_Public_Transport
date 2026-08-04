@@ -15,12 +15,17 @@ import pandas as pd
 from dashboard.filters import Filters
 
 SAMPLE_PATH = Path(__file__).resolve().parent / "sample_data" / "delay_facts.csv.gz"
+ENERGY_SAMPLE_PATH = Path(__file__).resolve().parent / "sample_data" / "energy_scores.csv.gz"
 
 DAY_ORDER = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 
 
 def sample_file_exists() -> bool:
     return SAMPLE_PATH.exists()
+
+
+def energy_sample_file_exists() -> bool:
+    return ENERGY_SAMPLE_PATH.exists()
 
 
 @lru_cache(maxsize=1)
@@ -33,6 +38,18 @@ def load_facts() -> pd.DataFrame:
         df["scheduled_arrival"] = pd.to_datetime(df["scheduled_arrival"], errors="coerce")
         if "hour_of_day" not in df.columns:
             df["hour_of_day"] = df["scheduled_arrival"].dt.hour
+    return df
+
+
+@lru_cache(maxsize=1)
+def load_energy_scores() -> pd.DataFrame:
+    """Public-demo energy scores (relative 0–100 index, not kWh)."""
+    if not ENERGY_SAMPLE_PATH.exists():
+        return pd.DataFrame()
+    df = pd.read_csv(ENERGY_SAMPLE_PATH, compression="gzip")
+    df["full_date"] = pd.to_datetime(df["full_date"]).dt.date
+    if "is_flagged" in df.columns:
+        df["is_flagged"] = df["is_flagged"].astype(bool)
     return df
 
 
@@ -89,10 +106,12 @@ def get_kpis(filters: Filters) -> dict:
             "median_delay_sec": None,
             "on_time_rate": None,
             "observed_delay_count": 0,
+            "realtime_match_rate": None,
             "worst_route": "N/A",
         }
     delays = df["delay_seconds"].dropna()
     on_time_rate = float((delays <= 0).mean()) if len(delays) else None
+    match_rate = float(len(delays) / len(df)) if len(df) else None
     worst = "N/A"
     if len(delays):
         by_route = (
@@ -109,8 +128,19 @@ def get_kpis(filters: Filters) -> dict:
         "median_delay_sec": float(delays.median()) if len(delays) else None,
         "on_time_rate": on_time_rate,
         "observed_delay_count": int(len(delays)),
+        "realtime_match_rate": match_rate,
         "worst_route": worst,
     }
+
+
+def get_energy_scores(start_date, end_date, region_id: str = "all") -> pd.DataFrame:
+    df = load_energy_scores()
+    if df.empty:
+        return df
+    out = df[(df["full_date"] >= start_date) & (df["full_date"] <= end_date)]
+    if region_id:
+        out = out[out["region_id"] == region_id]
+    return out.sort_values("energy_score", ascending=False).reset_index(drop=True)
 
 
 def get_avg_delay_by_route(filters: Filters, limit: int = 20) -> pd.DataFrame:

@@ -39,7 +39,8 @@ Open the **Energy scores** tab. The page includes plain-language explanations un
 chart (what the metric means, how to read colours/axes, and what flagged reason tags mean).
 Charts: score leaders, duration leaders, scatter, flagged routes with reason tags.
 
-Public Streamlit Cloud sample mode only has delay CSV — energy scores need local Postgres.
+Public Streamlit Cloud uses `dashboard/sample_data/energy_scores.csv.gz`
+(re-export with `py scripts/export_dashboard_sample.py` after computing scores).
 
 ## Airflow
 

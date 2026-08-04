@@ -28,12 +28,13 @@ Use this order if you are a **recruiter, interviewer, or developer new to the re
 | Step | Time | Open this | You will understand |
 |---:|---|---|---|
 | 1 | 2 min | This README (sections below) | Need → goals → architecture → live demos |
-| 2 | 5 min | [docs/01-project-purpose-and-goals.md](docs/01-project-purpose-and-goals.md) | Why it exists, success criteria, personas |
-| 3 | 10 min | [docs/03-star-schema-explained.md](docs/03-star-schema-explained.md) | Facts, dimensions, grain (Kimball) |
-| 4 | 10 min | [docs/02-architecture.md](docs/02-architecture.md) | How data moves through the system |
-| 5 | 5 min | [docs/04-glossary.md](docs/04-glossary.md) | GTFS, DAG, ETL, CI, … |
-| 6 | 10 min | [transit_delay_pipeline_4week_plan.md](transit_delay_pipeline_4week_plan.md) | How the project was planned week by week |
-| 7 | Optional | [docs/decisions/](docs/decisions/) | Real design choices and bugs we fixed |
+| 2 | 10 min | [docs/05-how-to-understand-this-project.md](docs/05-how-to-understand-this-project.md) | **Simplest full story** (start here if new) |
+| 3 | 5 min | [docs/01-project-purpose-and-goals.md](docs/01-project-purpose-and-goals.md) | Why it exists, success criteria, personas |
+| 4 | 10 min | [docs/03-star-schema-explained.md](docs/03-star-schema-explained.md) | Facts, dimensions, grain (Kimball) |
+| 5 | 10 min | [docs/02-architecture.md](docs/02-architecture.md) | How data moves through the system |
+| 6 | 5 min | [docs/04-glossary.md](docs/04-glossary.md) | GTFS, DAG, ETL, CI, … |
+| 7 | 10 min | [transit_delay_pipeline_4week_plan.md](transit_delay_pipeline_4week_plan.md) | How the project was planned week by week |
+| 8 | Optional | [docs/decisions/](docs/decisions/) | Real design choices and bugs we fixed |
 
 **One-sentence summary:**  
 We download SL (Stockholm) schedules and live delays from Trafiklab, join them with PySpark, store delay facts in PostgreSQL, check quality, and show charts (plus relative bus energy scores) in Streamlit.
@@ -122,7 +123,7 @@ Full plan: [`transit_delay_pipeline_4week_plan.md`](transit_delay_pipeline_4week
 | **3** | ✅ Complete | Streamlit delays UI, DQ task, 70+ pytest tests, GitHub Actions CI |
 | **4** | ✅ Mostly complete | Public Streamlit + GitHub Pages, CI refresh, relative **bus energy scores**, beginner docs |
 
-Checklists: [Week 1](docs/WEEK1_CHECKLIST.md) · [Week 2](docs/WEEK2_CHECKLIST.md) · [Week 3](docs/WEEK3_CHECKLIST.md)
+Checklists: [Week 1](docs/WEEK1_CHECKLIST.md) · [Week 2](docs/WEEK2_CHECKLIST.md) · [Week 3](docs/WEEK3_CHECKLIST.md) · [Week 4](docs/WEEK4_CHECKLIST.md)
 
 ---
 
@@ -379,6 +380,7 @@ Other ADRs: [001 operator](docs/decisions/001-operator-choice.md) · [002 dual A
 | Document | Purpose |
 |---|---|
 | [docs/00-START_HERE.md](docs/00-START_HERE.md) | **Beginner reading order** |
+| [docs/05-how-to-understand-this-project.md](docs/05-how-to-understand-this-project.md) | 10-minute plain-language overview |
 | [docs/01-project-purpose-and-goals.md](docs/01-project-purpose-and-goals.md) | Need, goals, personas |
 | [docs/02-architecture.md](docs/02-architecture.md) | Components & data flow |
 | [docs/03-star-schema-explained.md](docs/03-star-schema-explained.md) | Kimball model in plain English |
@@ -401,7 +403,7 @@ Other ADRs: [001 operator](docs/decisions/001-operator-choice.md) · [002 dual A
 | Transform (PySpark → Postgres) | Working |
 | Data quality gate | Working |
 | Delay dashboard (local + public sample) | Working |
-| Relative bus energy scores | Working (local Postgres) |
+| Relative bus energy scores | Working (local Postgres + public sample CSV) |
 | Tests + CI | Working |
 | GitHub Pages landing | Live |
 | Streamlit Cloud demo | Live (may sleep when idle) |

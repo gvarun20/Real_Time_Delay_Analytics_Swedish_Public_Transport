@@ -1,10 +1,12 @@
-"""Export a denormalized delay-facts CSV for public Streamlit Cloud demos.
+"""Export delay + energy sample CSVs for public Streamlit Cloud demos.
 
 Usage (Docker Postgres must be up and have fact rows):
 
     py scripts/export_dashboard_sample.py
 
-Writes: dashboard/sample_data/delay_facts.csv.gz
+Writes:
+  dashboard/sample_data/delay_facts.csv.gz
+  dashboard/sample_data/energy_scores.csv.gz
 """
 
 from __future__ import annotations
@@ -21,9 +23,10 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from config.settings import postgres_url  # noqa: E402
 
-OUT_PATH = PROJECT_ROOT / "dashboard" / "sample_data" / "delay_facts.csv.gz"
+DELAY_OUT = PROJECT_ROOT / "dashboard" / "sample_data" / "delay_facts.csv.gz"
+ENERGY_OUT = PROJECT_ROOT / "dashboard" / "sample_data" / "energy_scores.csv.gz"
 
-SQL = """
+DELAY_SQL = """
 SELECT
     f.date_key,
     d.full_date,
@@ -52,21 +55,60 @@ JOIN dim_vehicle_type vt ON f.vehicle_type_key = vt.vehicle_type_key
 ORDER BY f.date_key, f.trip_id, f.stop_sequence
 """
 
+ENERGY_SQL = """
+SELECT
+    e.date_key,
+    d.full_date,
+    e.region_id,
+    e.region_name,
+    r.route_id,
+    r.route_short_name,
+    r.route_long_name,
+    e.trip_count,
+    e.avg_km,
+    e.total_km,
+    e.p90_hours,
+    e.total_hours,
+    e.avg_stops,
+    e.delay_hours,
+    e.energy_score,
+    e.is_flagged,
+    e.flag_reasons
+FROM fact_route_energy_score e
+JOIN dim_date d ON e.date_key = d.date_key
+JOIN dim_route r ON e.route_key = r.route_key
+ORDER BY e.date_key, e.region_id, e.energy_score DESC
+"""
+
+
+def _write_gz(df: pd.DataFrame, path: Path, label: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    df.to_csv(path, index=False, compression="gzip")
+    size_mb = path.stat().st_size / (1024 * 1024)
+    print(f"Wrote {len(df):,} {label} rows -> {path} ({size_mb:.2f} MB)")
+
 
 def main() -> int:
     engine = create_engine(postgres_url(), pool_pre_ping=True)
     with engine.connect() as conn:
-        df = pd.read_sql(text(SQL), conn)
+        delays = pd.read_sql(text(DELAY_SQL), conn)
+        energy = pd.read_sql(text(ENERGY_SQL), conn)
 
-    if df.empty:
+    if delays.empty:
         print("ERROR: No rows in fact_trip_delay. Run gtfs_transform first.")
         return 1
 
-    OUT_PATH.parent.mkdir(parents=True, exist_ok=True)
-    df.to_csv(OUT_PATH, index=False, compression="gzip")
-    size_mb = OUT_PATH.stat().st_size / (1024 * 1024)
-    print(f"Wrote {len(df):,} rows → {OUT_PATH} ({size_mb:.2f} MB)")
-    print("Commit this file, then deploy dashboard/app.py on Streamlit Community Cloud.")
+    _write_gz(delays, DELAY_OUT, "delay")
+
+    if energy.empty:
+        print(
+            "WARN: No energy scores yet. Run:\n"
+            "  py jobs/compute_route_energy_scores.py --service-date YYYY-MM-DD --region all"
+        )
+    else:
+        _write_gz(energy, ENERGY_OUT, "energy")
+
+    print("Commit the sample_data files, then Streamlit Cloud will pick them up on next deploy.")
     return 0
 
 

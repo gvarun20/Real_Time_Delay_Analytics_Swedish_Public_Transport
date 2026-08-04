@@ -168,14 +168,25 @@ def render_delay_tab(filter_args: tuple) -> None:
         return
 
     st.subheader("Key metrics")
-    col1, col2, col3, col4 = st.columns(4)
+    st.caption(
+        "Quick health check for the selected filters. "
+        "**Realtime match %** = share of stop rows that got a live GTFS-RT update "
+        "(the rest have unknown delay)."
+    )
+    col1, col2, col3, col4, col5 = st.columns(5)
     col1.metric("Median delay", fmt_minutes(kpis["median_delay_sec"]))
     on_time_pct = (
         f"{kpis['on_time_rate'] * 100:.1f}%" if kpis["on_time_rate"] is not None else "N/A"
     )
     col2.metric("% on-time (≤0 delay)", on_time_pct)
     col3.metric("Trips observed", f"{kpis['trips_observed']:,}")
-    col4.metric("Worst route (avg delay)", kpis["worst_route"])
+    match_pct = (
+        f"{kpis['realtime_match_rate'] * 100:.1f}%"
+        if kpis.get("realtime_match_rate") is not None
+        else "N/A"
+    )
+    col4.metric("Realtime match %", match_pct)
+    col5.metric("Worst route (avg delay)", kpis["worst_route"])
 
     st.divider()
 
@@ -317,10 +328,9 @@ more stops, and/or more delay). A low score means a lighter route in that peer g
 
     if queries.using_sample_data():
         st.info(
-            "Energy scores need local Postgres (`fact_route_energy_score`). "
-            "Public sample mode only ships delay facts — run the compute job locally."
+            "Public demo mode: energy scores come from the shipped sample CSV "
+            "(`dashboard/sample_data/energy_scores.csv.gz`), not your home Postgres."
         )
-        return
 
     regions = energy_queries.list_regions()
     region_labels = {name: rid for rid, name in regions}
@@ -333,11 +343,18 @@ more stops, and/or more delay). A low score means a lighter route in that peer g
 
     raw = cached_energy_scores(start_date, end_date, region_id)
     if raw.empty:
-        st.warning(
-            "No energy scores for this range. After delay facts exist, run:\n\n"
-            "`py jobs/compute_route_energy_scores.py --service-date YYYY-MM-DD --region "
-            f"{region_id}`"
-        )
+        if queries.using_sample_data():
+            st.warning(
+                "No energy sample for this date/region. "
+                "Widen the date range, try region **All stops**, or re-export with "
+                "`py scripts/export_dashboard_sample.py`."
+            )
+        else:
+            st.warning(
+                "No energy scores for this range. After delay facts exist, run:\n\n"
+                "`py jobs/compute_route_energy_scores.py --service-date YYYY-MM-DD --region "
+                f"{region_id}`"
+            )
         return
 
     view = energy_queries.aggregate_energy_for_view(raw)

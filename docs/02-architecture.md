@@ -12,7 +12,7 @@ flowchart TB
     subgraph Orchestration["Apache Airflow Docker"]
         DAG_S["gtfs_static_ingest daily"]
         DAG_R["gtfs_realtime_ingest every 15 min"]
-        DAG_T["gtfs_transform then data quality"]
+        DAG_T["gtfs_transform then DQ then energy scores"]
     end
 
     subgraph Raw["Raw landing zone"]
@@ -27,10 +27,11 @@ flowchart TB
     subgraph Warehouse["PostgreSQL transit_dw"]
         DIMS["dim_date dim_route dim_stop dim_vehicle_type"]
         FACT["fact_trip_delay"]
+        ENERGY["fact_route_energy_score"]
     end
 
     subgraph Serve["Streamlit"]
-        DASH["Dashboard"]
+        DASH["Dashboard Delays + Energy"]
         DQ["validate_data_quality"]
     end
 
@@ -42,11 +43,13 @@ flowchart TB
     SPARK --> DIMS
     SPARK --> FACT
     FACT --> DQ
+    DQ --> ENERGY
     FACT --> DASH
+    ENERGY --> DASH
     DIMS --> DASH
 ```
 
-**In plain words:** Trafiklab → Airflow downloads → files in `data/raw/` → PySpark join + delay math → PostgreSQL star schema → data quality check → Streamlit charts.
+**In plain words:** Trafiklab → Airflow downloads → files in `data/raw/` → PySpark join + delay math → PostgreSQL star schema → data quality check → relative energy scores → Streamlit charts.
 
 ## Component map
 
@@ -54,7 +57,7 @@ flowchart TB
 |---|---|---|
 | `gtfs_static_ingest` | Daily pull of Sweden GTFS zip | — |
 | `gtfs_realtime_ingest` | 15-min TripUpdates snapshots for SL | — |
-| `gtfs_transform` | PySpark load + `validate_data_quality` | — |
+| `gtfs_transform` | PySpark load → `validate_data_quality` → energy scores | — |
 | Airflow webserver | UI + DAG management | **8081** |
 | Postgres `transit_dw` | Star schema warehouse | **5433** |
 | Postgres `airflow` | Airflow metadata (internal) | internal |

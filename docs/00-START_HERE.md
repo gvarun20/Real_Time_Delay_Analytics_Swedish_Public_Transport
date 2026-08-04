@@ -9,6 +9,7 @@ Welcome. If you are new to data engineering, read in this order.
 
 | # | Document | What you will learn |
 |---|---|---|
+| 0 | [05-how-to-understand-this-project.md](05-how-to-understand-this-project.md) | **Simplest overview** (10 minutes) |
 | 1 | [01-project-purpose-and-goals.md](01-project-purpose-and-goals.md) | Problem, goals, what “done” means |
 | 2 | [03-star-schema-explained.md](03-star-schema-explained.md) | **Why Kimball star schema** — facts, dimensions, grain |
 | 3 | [02-architecture.md](02-architecture.md) | How data moves: Trafiklab → Airflow → Spark → Postgres → dashboard |
@@ -22,6 +23,7 @@ Welcome. If you are new to data engineering, read in this order.
 | [WEEK1_CHECKLIST.md](WEEK1_CHECKLIST.md) | Week 1 gate (ingest) |
 | [WEEK2_CHECKLIST.md](WEEK2_CHECKLIST.md) | Week 2 gate (transform + warehouse) |
 | [WEEK3_CHECKLIST.md](WEEK3_CHECKLIST.md) | Week 3 gate (dashboard + DQ + tests) |
+| [WEEK4_CHECKLIST.md](WEEK4_CHECKLIST.md) | Week 4 gate (public demos + polish) |
 
 ## 3) Operate the system (commands)
 

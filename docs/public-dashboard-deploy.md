@@ -21,7 +21,10 @@ cd E:\SUMMER_3RD_PROJECT
 py scripts/export_dashboard_sample.py
 ```
 
-This creates `dashboard/sample_data/delay_facts.csv.gz`.
+This creates:
+
+- `dashboard/sample_data/delay_facts.csv.gz` — Delays tab  
+- `dashboard/sample_data/energy_scores.csv.gz` — Energy scores tab
 
 ### 2. Commit and push (you run git — not the agent)
 

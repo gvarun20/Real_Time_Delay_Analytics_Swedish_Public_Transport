@@ -169,6 +169,9 @@ def get_kpis(filters: Filters) -> dict:
     """
     df = _run(sql, params)
     row = df.iloc[0]
+    total = int(row["total_facts"] or 0)
+    observed = int(row["observed_delay_count"] or 0)
+    match_rate = (observed / total) if total else None
 
     worst_route_sql = f"""
         SELECT r.route_short_name, AVG(f.delay_seconds) AS avg_delay
@@ -186,11 +189,12 @@ def get_kpis(filters: Filters) -> dict:
     )
 
     return {
-        "total_facts": int(row["total_facts"] or 0),
+        "total_facts": total,
         "trips_observed": int(row["trips_observed"] or 0),
         "median_delay_sec": row["median_delay_sec"],
         "on_time_rate": row["on_time_rate"],
-        "observed_delay_count": int(row["observed_delay_count"] or 0),
+        "observed_delay_count": observed,
+        "realtime_match_rate": match_rate,
         "worst_route": worst_route,
     }
 
